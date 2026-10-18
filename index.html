@@ -338,7 +338,7 @@ body[data-tab=home] #peek{display:flex}
 <div class="sheet" id="pick"></div>
 <div id="snack" role="status"></div>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
-<input type="file" id="rulesIn" accept="application/json,.json" hidden>
+<input type="file" id="rulesIn" accept="application/json,.json" hidden><input type="file" id="setIn" accept="application/json,.json" hidden>
 <script>
 "use strict";
 const KEY='budget-app-v1';
@@ -563,7 +563,7 @@ function rSet(){const st=S.settings;
   h+=`<div class="sec">Postes (net après impôt · +100 % = 0 si aucun)</div><div class="card" id="set-shifts">`+st.shifts.map((s,i,a)=>`<div class="erow wrap">${nm('shifts.'+i+'.name',s.name)}${inp('shifts.'+i+'.rate',s.rate,84)}<div class="erow2"><span class="sub" style="flex:1">Taux +100 %</span>${inp('shifts.'+i+'.alt',s.alt||0,84)}${ctl('shifts',i,a.length)}</div></div>`).join('')+add('shifts','Type de poste')+`</div>`;
   h+=`<div class="sec">Plan Banque de France</div><div class="card"><div class="row"><span>Début (AAAA-MM)</span><input class="num" data-setn="bdf.start" value="${esc(st.bdf.start)}"></div><div class="row"><span>Mensualités</span>${inp('bdf.n',st.bdf.n)}</div><div class="row"><span>Total officiel</span>${inp('bdf.total',st.bdf.total)}</div><div class="row"><span>Créancier 1 (défaut)</span>${inp('bdf.lex',st.bdf.lex)}</div><div class="row"><span>Créancier 2 (défaut)</span>${inp('bdf.cm',st.bdf.cm)}</div></div>`;
   h+=rulesHtml();
-  h+=`<div class="sec">Données (stockées uniquement sur cet appareil)</div><div class="card" style="display:grid;gap:10px;padding:14px"><button class="btn" data-act="json">Exporter la sauvegarde JSON</button><button class="btn sec2" data-act="import">Importer une sauvegarde JSON</button><button class="btn sec2" data-act="importops">Importer un relevé (PDF / CSV / JSON)</button><button class="btn sec2" data-act="csv">Exporter les dépenses (CSV)</button></div><div class="sec">Réinitialisation</div><div class="card" id="set-reset" style="display:grid;gap:12px;padding:14px"><div class="rsrow"><button class="btn del" data-act="rsdata">Réinitialiser les données</button><span class="sub">Opérations, mois, revenus, mouvements des coffres. Garde réglages, catégories, charges fixes, règles d'import.</span></div><div class="rsrow"><button class="btn del" data-act="rsset">Réinitialiser les réglages</button><span class="sub">Remet les réglages par défaut. Garde toutes les données.</span></div><div class="rsrow"><button class="btn danger" data-act="rsall">Tout réinitialiser</button><span class="sub">Efface tout (données + réglages).</span></div></div><p class="sub" style="text-align:center">Aucune donnée n'est envoyée sur Internet · schéma v${S.v}</p>`;
+  h+=`<div class="sec">Données (stockées uniquement sur cet appareil)</div><div class="card" style="display:grid;gap:10px;padding:14px"><button class="btn" data-act="json">Exporter la sauvegarde JSON</button><button class="btn sec2" data-act="import">Importer une sauvegarde JSON</button><button class="btn sec2" data-act="importops">Importer un relevé (PDF / CSV / JSON)</button><button class="btn sec2" data-act="csv">Exporter les dépenses (CSV)</button><button class="btn sec2" data-act="setexp">Exporter les réglages</button><button class="btn sec2" data-act="setimp">Importer les réglages</button><span class="sub">Réglages seuls (enveloppes, charges, règles, coffres, thème…) : les dépenses et revenus ne sont jamais touchés.</span></div><div class="sec">Réinitialisation</div><div class="card" id="set-reset" style="display:grid;gap:12px;padding:14px"><div class="rsrow"><button class="btn del" data-act="rsdata">Réinitialiser les données</button><span class="sub">Opérations, mois, revenus, mouvements des coffres. Garde réglages, catégories, charges fixes, règles d'import.</span></div><div class="rsrow"><button class="btn del" data-act="rsset">Réinitialiser les réglages</button><span class="sub">Remet les réglages par défaut. Garde toutes les données.</span></div><div class="rsrow"><button class="btn danger" data-act="rsall">Tout réinitialiser</button><span class="sub">Efface tout (données + réglages).</span></div></div><p class="sub" style="text-align:center">Aucune donnée n'est envoyée sur Internet · schéma v${S.v}</p>`;
   $('#v-set').innerHTML=h;}
 /* ---------- édition modulaire des listes ---------- */
 const getList=path=>path.split('.').reduce((o,k)=>o[k],S.settings);
@@ -934,6 +934,59 @@ function resetSettings(){const o=S.settings,ns=defaults().settings;ns.importCfg.
 function doReset(){const k=F.k;if(k==='all'&&!confirm('Tout effacer définitivement (données ET réglages) ?'))return;snapReset();
   if(k==='data')resetData();else if(k==='set')resetSettings();else S=defaults();
   save();closeSheet();cur=pKey(todayISO());render();toast(k==='data'?'Données effacées · réglages conservés':k==='set'?'Réglages par défaut · données conservées':'Tout a été réinitialisé')}
+/* ---------- export / import des réglages seuls ---------- */
+let SETP=null;
+function vDefs(list){return (list||[]).map(v=>({id:v.id,name:v.name,n26:v.n26==null?v.name:v.n26,target:+v.target||0,color:v.color}))}
+function exportSettings(){download('reglages-budget-'+todayISO()+'.json',JSON.stringify({app:'budget-settings',v:SCHEMA,exported:new Date().toISOString(),settings:S.settings,vaults:vDefs(S.vaults)},null,1),'application/json');toast('Réglages exportés')}
+function setErr(m){const e=new Error(m);e.user=1;return e}
+/* Lit un fichier : export de réglages, sauvegarde complète ou règles. Renvoie {kind,settings,vaults|null} migrés. */
+function parseSettingsFile(txt){let o;try{o=JSON.parse(txt)}catch(e){throw setErr('Fichier illisible : ce n\u2019est pas du JSON valide.')}
+  if(!o||typeof o!=='object'||Array.isArray(o))throw setErr('Fichier non reconnu : attendu un export de réglages, une sauvegarde ou des règles.');
+  const clone=x=>JSON.parse(JSON.stringify(x));let kind,st,vaults=null,ver=SCHEMA,bank=null;
+  if(o.app==='budget-rules'||(!o.settings&&!o.data&&(Array.isArray(o.rules)||Array.isArray(o.learned)))){
+    if(!Array.isArray(o.rules)&&!Array.isArray(o.learned))throw setErr('Fichier de règles vide ou invalide.');
+    kind='rules';st=clone(S.settings);const ic=st.importCfg;if(Array.isArray(o.rules))ic.rules=o.rules.filter(x=>x&&x.m&&x.act);if(Array.isArray(o.learned))ic.learned=o.learned.filter(x=>x&&x.key&&x.act);if(Array.isArray(o.ownNames)&&o.ownNames.length)ic.ownNames=o.ownNames.filter(n=>typeof n==='string');
+    return {kind,settings:st,vaults:null}}
+  if(o.app==='budget-settings'||(o.settings&&!o.data&&!Array.isArray(o.expenses))){kind='settings';st=o.settings;vaults=Array.isArray(o.vaults)?o.vaults:null;ver=+o.v||1}
+  else{const d=o.data&&typeof o.data==='object'?o.data:o;if(!d.settings||!Array.isArray(d.expenses))throw setErr('Fichier non reconnu : attendu un export de réglages, une sauvegarde ou des règles.');
+    kind='backup';st=d.settings;vaults=Array.isArray(d.vaults)?d.vaults:null;ver=+d.v||1;bank=d.bank||null}
+  if(!st||typeof st!=='object'||Array.isArray(st)||!Array.isArray(st.envelopes)&&!Array.isArray(st.fixed)&&!st.importCfg)throw setErr('Réglages absents ou invalides dans ce fichier.');
+  st=clone(st);if(!Array.isArray(st.envelopes))st.envelopes=defaults().settings.envelopes;
+  st.envelopes=st.envelopes.filter(e=>e&&Array.isArray(e.cats));
+  /* migration des anciens réglages sur un état temporaire vide (aucune donnée réelle n'est touchée) */
+  const es=bank&&bank.espaces&&typeof bank.espaces==='object'&&Object.keys(bank.espaces).length;
+  const tmp={v:ver,settings:st,expenses:[],incomes:[],transfers:[],months:{},bank:clone(bank||{}),vaults:vaults?clone(vaults):undefined,vaultMoves:[]};
+  if(ver>=6&&!vaults)tmp.vaults=[];
+  let m;try{m=migrate(tmp)}catch(e){throw setErr('Réglages invalides : migration impossible.')}
+  const vv=vaults||(ver<6&&es)?vDefs(m.vaults).filter(v=>v&&v.name):null;
+  return {kind,settings:m.settings,vaults:vv}}
+/* Prévisualise l'effet sur les coffres */
+function vPlan(fv){const plan={add:[],upd:[],del:[],keep:[]};if(!fv)return plan;const used=new Set();
+  fv.forEach(f=>{const e=S.vaults.find(v=>!used.has(v.id)&&(v.id===f.id||norm(v.n26||v.name)===norm(f.n26||f.name)||norm(v.name)===norm(f.name)));if(e){used.add(e.id);plan.upd.push([e,f])}else plan.add.push(f)});
+  S.vaults.filter(v=>!used.has(v.id)).forEach(v=>{(S.vaultMoves.some(m=>m.vault===v.id)||v.anchor?plan.keep:plan.del).push(v)});return plan}
+function orphCats(ns){const have=new Set(ns.envelopes.flatMap(e=>e.cats.map(c=>c.id)));return [...new Set(S.expenses.map(x=>x.cat))].filter(id=>id&&!have.has(id))}
+function setImpSheet(P){SETP=P;const o=S.settings,n=P.settings,oi=o.importCfg||{},ni=n.importCfg||{},L=a=>(a||[]).length,cats=s=>(s.envelopes||[]).reduce((t,e)=>t+e.cats.length,0);
+  const TH={auto:'Auto',light:'Clair',dark:'Sombre'};const row=(l,a,b)=>`<div class="row"><span class="t">${esc(l)}</span><span class="r sub">${a===b?esc(String(b)):esc(String(a))+' \u2192 <b>'+esc(String(b))+'</b>'}</span></div>`;
+  let h=`<h3>Importer les réglages</h3><p class="sub">${P.kind==='rules'?'Fichier de règles : seules les règles d\u2019import seront remplacées.':P.kind==='backup'?'Sauvegarde complète : seuls ses réglages et ses coffres sont repris.':'Export de réglages.'}</p><div class="sec">Sera remplacé</div><div class="card" id="sipList">`;
+  h+=row('Règles d\u2019import',L(oi.rules),L(ni.rules))+row('Règles apprises',L(oi.learned),L(ni.learned))+row('Noms du titulaire',L(oi.ownNames),L(ni.ownNames));
+  if(P.kind!=='rules'){h+=row('Charges fixes',L(o.fixed),L(n.fixed))+row('Enveloppes',L(o.envelopes),L(n.envelopes))+row('Catégories',cats(o),cats(n))+row('Types de revenus',L(o.incomeTypes),L(n.incomeTypes))+row('Poches d\u2019épargne',L(o.pockets),L(n.pockets))+row('Thème',TH[o.theme||'auto'],TH[n.theme||'auto'])+row('Début du mois budgétaire',o.startDay,n.startDay)+row('Base budget',eur(+o.base||0),eur(+n.base||0))}
+  const vp=vPlan(P.vaults);if(P.vaults)h+=`<div class="row"><span class="t">Coffres</span><span class="r sub" id="sipV">${vp.add.length} ajouté${vp.add.length>1?'s':''} · ${vp.upd.length} mis à jour${vp.del.length?' · '+vp.del.length+' supprimé'+(vp.del.length>1?'s':'')+' (vides)':''}${vp.keep.length?' · '+vp.keep.length+' conservé'+(vp.keep.length>1?'s':'')+' (soldes/mouvements)':''}</span></div>`;
+  const oc=P.kind==='rules'?[]:orphCats(n);if(oc.length)h+=`<div class="row"><span class="t">Catégories utilisées conservées</span><span class="r sub">${oc.length}</span></div>`;
+  h+=`</div><div class="sec">Ne sera jamais modifié</div><div class="card sub" style="padding:12px 16px">Dépenses, revenus, mois, virements, mouvements et soldes des coffres.</div><p class="sub">Une copie de secours est gardée sur l\u2019appareil et l\u2019import peut être annulé.</p><div class="btns"><button class="btn sec2" data-act="close">Annuler</button><button class="btn" data-act="setgo" id="sipGo">Remplacer les réglages</button></div>`;
+  openSheet(h);F={kind:'setimp'}}
+function applySettingsImport(){const P=SETP;if(!P)return;SETP=null;const snap=JSON.stringify(S);try{localStorage.setItem(KEY+'-avant-import-reglages',snap)}catch(e){}
+  const o=S.settings,ns=JSON.parse(JSON.stringify(P.settings));
+  if(P.kind!=='rules'){const oc=(o.envelopes||[]).flatMap(e=>e.cats),orph=orphCats(ns);
+    if(orph.length)ns.envelopes.push({id:uid(),name:'Catégories conservées',color:freeColor(ns.envelopes),cats:orph.map(id=>({id,name:(oc.find(c=>c.id===id)||{name:'Catégorie '+id}).name,amount:0}))});
+    const op=o.pockets||[];[...new Set(S.transfers.map(x=>x.goal))].filter(id=>id&&!ns.pockets.some(p=>p.id===id)).forEach(id=>{const p=op.find(x=>x.id===id);ns.pockets.push(p?{...p}:{id,kind:'std',name:'Poche',target:0,init:0})});
+    const ot=o.incomeTypes||[];[...new Set(S.incomes.map(x=>x.type))].filter(id=>id&&!ns.incomeTypes.some(t=>t.id===id)).forEach(id=>ns.incomeTypes.push({id,name:(ot.find(t=>t.id===id)||{name:'Revenu'}).name}))}
+  S.settings=ns;
+  if(P.vaults){const vp=vPlan(P.vaults);vp.upd.forEach(([e,f])=>{e.name=String(f.name||e.name);e.target=+f.target||0;if(f.color)e.color=f.color});
+    const del=new Set(vp.del.map(v=>v.id));S.vaults=S.vaults.filter(v=>!del.has(v.id));
+    vp.add.forEach((f,i)=>{let id=f.id||vSlug(f.name);if(V(id))id+='-'+uid().slice(0,4);S.vaults.push({id,name:String(f.name),n26:f.n26==null?String(f.name):String(f.n26),target:+f.target||0,color:f.color||VCOL[(S.vaults.length)%VCOL.length],anchor:null})})}
+  UNDO=snap;save();closeSheet();render();snack(P.kind==='rules'?'Règles remplacées':'Réglages importés')}
+function importSettings(file){const r=new FileReader();r.onload=()=>{try{setImpSheet(parseSettingsFile(r.result))}catch(e){setToast(e&&e.user?e.message:'Fichier invalide : réglages illisibles.')}};r.onerror=()=>setToast('Lecture du fichier impossible.');r.readAsText(file)}
+function setToast(t){toast(t);clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('on'),4500)}
 /* ---------- export / import des seules règles ---------- */
 function exportRules(){const c=IC();download('regles-import-'+todayISO()+'.json',JSON.stringify({app:'budget-rules',v:1,exported:new Date().toISOString(),rules:c.rules||[],learned:c.learned||[],ownNames:c.ownNames||[]},null,1),'application/json');toast('Règles exportées')}
 function importRules(file){const r=new FileReader();r.onload=()=>{try{let o=JSON.parse(r.result);if(o.data&&o.data.settings)o=o.data.settings.importCfg||{};else if(o.settings)o=o.settings.importCfg||{};
@@ -1092,6 +1145,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('button,[data-edi
    case'lpdup':lpDup();break;
    case'lpedit':{const i=F.id;closeSheet();expSheet(i);break}
    case'rsdata':resetSheet('data');break;case'rsset':resetSheet('set');break;case'rsall':resetSheet('all');break;case'rsgo':doReset();break;
+   case'setexp':exportSettings();break;case'setimp':$('#setIn').click();break;case'setgo':applySettingsImport();break;
    case'rulesexp':exportRules();break;case'rulesimp':$('#rulesIn').click();break;
    case'vnew':vEditSheet(null);break;case'vsave':saveVault();break;case'vmove':vMoveSheet(F&&F.kind==='vault'?F.id:null,'+');break;case'vmsave':saveVMove();break;
    case'vmdel':if(confirm('Supprimer ce mouvement ?')){const b=F.back;S.vaultMoves=S.vaultMoves.filter(x=>x.id!==F.id);save();closeSheet();render();vaultSheet(b);toast('Supprimé')}break;
@@ -1111,6 +1165,7 @@ document.addEventListener('change',e=>{const t=e.target,d=t.dataset;
   else if(d.mvenv){const[ei,ci]=d.mvenv.split('|').map(Number);moveCatEnv(ei,ci,+t.value)}
   else if(d.bdfamt){M(cur).bdf[d.bdfamt]=r2(pnum(t.value));save();render()}});
 $('#opsIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)importOpsFile(f);e.target.value=''});
+$('#setIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)importSettings(f);e.target.value=''});
 $('#rulesIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)importRules(f);e.target.value=''});
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)importJSON(f);e.target.value=''});
 $('#sbg').onclick=closeSheet;$('#pbg').onclick=closePick;$('#fab').onclick=()=>expSheet();
