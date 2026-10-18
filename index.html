@@ -325,6 +325,10 @@ body[data-tab=home] #peek{display:flex}
 .acct{grid-template-columns:repeat(var(--n,2),1fr);margin-top:8px}.acct button{font-size:14px;min-height:36px}
 .tglrow{display:flex;gap:10px;align-items:center;font-size:15px}.tglrow input{width:20px;height:20px;accent-color:var(--acc)}
 .svcard .row{padding:6px 0}
+
+.op .a.pos,.row .a.pos{color:var(--green)}
+.retrow{display:flex;gap:10px;align-items:center;font-size:15px;margin-top:8px;padding:2px 2px}.retrow input{width:20px;height:20px;accent-color:var(--green)}
+.amt.ret{color:var(--green)}
 </style>
 </head>
 <body>
@@ -476,6 +480,10 @@ function quickCats(n){const ok=new Set(allCats().map(c=>c.id)),t=Date.parse(toda
   if(q.length<n)allCats().forEach(c=>{if(!q.includes(c.id)&&c.amount>0)q.push(c.id)});
   if(q.length<n)allCats().forEach(c=>{if(!q.includes(c.id))q.push(c.id)});
   return q.slice(0,n)}
+/* ---------- v12 : retours / remboursements (montant négatif) ---------- */
+const isRet=x=>x&&x.amount<0;
+function expAmt(a){return a<0?'+'+eur(-a):'−'+eur(a)}
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='fRet'&&F&&F.kind==='exp'){F.ret=e.target.checked;updAmt()}});
 function migrate(s){const d=defaults(),st=s.settings;
   if(!s.v||s.v<2){
     if(st.goals&&!st.pockets){const g=st.goals;st.pockets=[{...d.settings.pockets[0],...g.ef,id:'ef',kind:'ef'},{id:'voiture',kind:'std',...g.voiture},{id:'voyage',kind:'std',...g.voyage},{id:'btc',kind:'btc',...g.btc}]}
@@ -593,7 +601,7 @@ function rExp(){const c=calc(cur);const list=[...c.exps].sort((a,b)=>b.date.loca
   if(list.length>3)h+=`<label class="srch">${SV('search')}<input id="expQ" type="search" placeholder="Libellé, catégorie ou montant" value="${esc(expQ)}" autocomplete="off" enterkeyhint="search" aria-label="Rechercher une dépense"></label><div class="card sub" id="expNone">Aucune dépense ne correspond.</div>`;
   if(!list.length)h+=`<div class="card sub" style="text-align:center;padding:30px">Aucune dépense ce mois.<br>Touchez « + » pour en ajouter une.</div>`;
   else{let last='';h+='';list.forEach(x=>{if(x.date!==last){if(last)h+='</div>';h+=`<div class="sec">${esc(fday(x.date))}</div><div class="list">`;last=x.date}
-    h+=`<div class="op exp" data-edit="${x.id}" data-q="${esc(norm((x.note||'')+' '+catName(x.cat)+' '+nf.format(x.amount)+' '+x.amount))}"><span class="av">${catIc(x.cat)}</span><div class="t"><div class="n">${esc(x.note||catName(x.cat))}</div><div class="c">${esc(catName(x.cat))}</div></div><span class="a">−${eur(x.amount)}</span></div>`});h+='</div>'}
+    h+=`<div class="op exp" data-edit="${x.id}" data-q="${esc(norm((x.note||'')+' '+catName(x.cat)+' '+nf.format(x.amount)+' '+x.amount))}"><span class="av">${catIc(x.cat)}</span><div class="t"><div class="n">${esc(x.note||catName(x.cat))}</div><div class="c">${esc(catName(x.cat))}${x.amount<0?' · Retour':''}</div></div><span class="a${x.amount<0?' pos':''}">${expAmt(x.amount)}</span></div>`});h+='</div>'}
   h+=`<div class="btns" style="margin-top:6px"><button class="btn sec2" data-act="csv">Export CSV</button><button class="btn sec2" data-act="json">Sauvegarde JSON</button></div>`;
   $('#v-exp').innerHTML=h;if(expQ)filterExp()}
 function rInc(){const c=calc(cur),st=S.settings,m=M(cur);const est=r2(st.shifts.reduce((a,s)=>a+(m.shifts[s.id]||0)*sRate(s),0));
@@ -683,17 +691,18 @@ let F=null;
 function openSheet(html){const sn=$('#snack');if(sn&&sn.classList.contains('on')&&F&&F.kind==='ops')sn.classList.remove('on');$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#sbg').classList.add('on');$('#sheet').classList.add('on')}
 function closeSheet(){if($('#pick'))closePick();$('#sbg').classList.remove('on');$('#sheet').classList.remove('on');F=null}
 function defDate(){const t=todayISO();return inP(t,cur)?t:isoOf(pStart(cur))}
-function expSheet(id){const x=id?S.expenses.find(e=>e.id===id):null;F={kind:'exp',id,amt:x?nf.format(x.amount).replace(/\s/g,''):'',cat:x?x.cat:null,date:x?x.date:defDate(),note:x?x.note:'',acct:x&&x.acct||''};
+function expSheet(id){const x=id?S.expenses.find(e=>e.id===id):null;F={kind:'exp',id,ret:!!(x&&x.amount<0),amt:x?nf.format(Math.abs(x.amount)).replace(/\s/g,''):'',cat:x?x.cat:null,date:x?x.date:defDate(),note:x?x.note:'',acct:x&&x.acct||''};
   const cats=S.settings.envelopes.map(e=>`<div class="lbl" style="margin-top:4px"><i class="dot" style="background:${e.color}"></i>${esc(e.name)}</div><div class="chips" style="margin-top:4px;--c:${e.color}">`+e.cats.map(c=>`<button class="chip ${F.cat===c.id?'on':''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')+'</div>').join('');
   openSheet(`<div class="amt" id="amt"></div>${cats}<div class="keys">${['1','2','3','4','5','6','7','8','9',',','0','⌫'].map(k=>`<button data-key="${k}">${k}</button>`).join('')}</div>
    <div class="meta"><input type="date" id="fDate" value="${F.date}"><input id="fNote" placeholder="Note" value="${esc(F.note)}"></div>
+   <label class="retrow"><input type="checkbox" id="fRet" ${F.ret?'checked':''}> Retour / remboursement (argent récupéré)</label>
    <div class="seg acct" id="fAcct" role="radiogroup" aria-label="Payé depuis" style="--n:${F.acct.startsWith('space:')?3:2}">${[['','Compte N26'],...(F.acct.startsWith('space:')?[[F.acct,acctLabel(F.acct)]]:[]),['ext','Revolut / autre']].map(([k,l])=>`<button class="${F.acct===k?'on':''}" data-acct="${esc(k)}" role="radio" aria-checked="${F.acct===k}">${esc(l)}</button>`).join('')}</div>
    <div class="btns" style="margin-top:10px">${id?'<button class="btn del" data-act="delexp">Supprimer</button>':'<button class="btn sec2" data-act="close">Annuler</button>'}<button class="btn" data-act="saveexp" id="saveExp">${id?'Enregistrer':'Ajouter'}</button></div>`);updAmt()}
-function updAmt(){$('#amt').textContent=(F.amt||'0')+' €';const ok=pnum(F.amt)>0&&F.cat;$('#saveExp').style.opacity=ok?1:.4}
-function saveExp(){const amount=r2(pnum(F.amt));if(!(amount>0))return toast('Montant ?');if(!F.cat)return toast('Choisis une catégorie');
+function updAmt(){const el=$('#amt');el.textContent=(F.ret?'+':'')+(F.amt||'0')+' €'+(F.ret?' · retour':'');el.classList.toggle('ret',!!F.ret);const ok=pnum(F.amt)>0&&F.cat;$('#saveExp').style.opacity=ok?1:.4}
+function saveExp(){const a0=r2(pnum(F.amt));if(!(a0>0))return toast('Montant ?');const amount=F.ret?-a0:a0;if(!F.cat)return toast('Choisis une catégorie');
   const date=$('#fDate').value||defDate(),note=$('#fNote').value.trim();
   if(F.id){const e0=S.expenses.find(e=>e.id===F.id);Object.assign(e0,{amount,cat:F.cat,date,note});if(F.acct)e0.acct=F.acct;else delete e0.acct}else S.expenses.push({id:uid(),date,amount,cat:F.cat,note,at:nowISO(),...(F.acct?{acct:F.acct}:{})});
-  const was=F.id;save();closeSheet();if(!inP(date,cur))cur=pKey(date);render();toast(was?'Modifié':'Dépense enregistrée')}
+  const was=F.id;save();closeSheet();if(!inP(date,cur))cur=pKey(date);render();toast(was?'Modifié':amount<0?'Retour enregistré':'Dépense enregistrée')}
 function formSheet(kind,id){const isInc=kind==='inc';const arr=isInc?S.incomes:S.transfers;const x=id?arr.find(e=>e.id===id):null;F={kind,id};
   const st=S.settings,a=alloc(cur);
   openSheet(`<h3>${isInc?(id?'Modifier la paie':'Nouvelle paie'):(id?'Modifier le virement':'Virement épargne')}</h3><div style="display:grid;gap:10px">
@@ -1116,7 +1125,7 @@ document.addEventListener('input',e=>{if(e.target.id==='expQ'){expQ=e.target.val
 /* appui long sur une dépense : Modifier / Dupliquer aujourd'hui */
 let lpT=0,lpFired=false,lpXY=null;
 function lpSheet(id){const x=S.expenses.find(e=>e.id===id);if(!x)return;F={kind:'lp',id};
-  openSheet(`<div class="ihead"><h3>${esc(x.note||catName(x.cat))}</h3><button class="xbtn" data-act="close" aria-label="Fermer">✕</button></div><div class="sub">${esc(catName(x.cat))} · ${fdate(x.date)} · −${eur(x.amount)}</div>
+  openSheet(`<div class="ihead"><h3>${esc(x.note||catName(x.cat))}</h3><button class="xbtn" data-act="close" aria-label="Fermer">✕</button></div><div class="sub">${esc(catName(x.cat))} · ${fdate(x.date)} · ${expAmt(x.amount)}${x.amount<0?' (retour / remboursement)':''}</div>
 <div class="lpacts"><button class="btn" data-act="lpdup">${SV('copy')}Dupliquer à la date du jour</button><button class="btn sec2" data-act="lpedit">${SV('pencil')}Modifier</button></div>`)}
 function lpDup(){const x=S.expenses.find(e=>e.id===F.id);if(!x)return;const date=todayISO();S.expenses.push({...x,id:uid(),date});save();closeSheet();if(!inP(date,cur))cur=pKey(date);render();toast('Dépense dupliquée')}
 document.addEventListener('pointerdown',e=>{const r=e.target.closest('#v-exp .op.exp,#v-home .op[data-edit]');if(!r)return;lpXY=[e.clientX,e.clientY];clearTimeout(lpT);
@@ -1167,7 +1176,7 @@ function rHome(){const c=calc(cur),st=S.settings;let h='';
   h+=`<div class="hd"><h2>Coffres</h2><button data-tab="vault">Tout voir</button></div><div class="vs">`+(VL.length?`<button class="vc tot" data-tab="vault"><span class="n">${SV('vault')}Total N26</span><b>${esc(eur(vTotal()))}</b><small>courant + ${VL.length-1} coffre${VL.length>2?'s':''}</small></button>`+
     VL.map(v=>{const b=vBal(v.id);return`<button class="vc${v.kind==='main'?' main':''}" data-vault="${v.id}"><span class="n">${SV(v.kind==='main'?'bank':icFor(v.name,'vault'))}${esc(v.name)}</span><b class="${b<0?'neg':''}">${esc(eur(b))}</b>${v.target?`<div class="g"><i style="width:${Math.min(100,Math.max(0,b/v.target*100)).toFixed(1)}%"></i></div>`:`<small>${v.kind==='main'&&!v.anchor?'Solde à fixer':v.anchor?'Solde du '+fdate(v.anchor.date).slice(0,5):'Sans objectif'}</small>`}</button>`}).join(''):`<button class="vc new" data-tab="vault"><span class="n">${SV('plus')}Créer un coffre</span><small>Espaces N26, épargne…</small></button>`)+`</div>`;
   const ids=env?new Set(env.cats.map(x=>x.id)):null,ops=c.exps.filter(x=>!ids||ids.has(x.cat)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
-  h+=`<div class="hd"><h2>${env?'Opérations · '+esc(env.name):'Opérations récentes'}</h2><button data-tab="exp">Tout voir</button></div><div class="list">`+(ops.length?ops.map(x=>`<div class="op" data-edit="${x.id}"><span class="av">${catIc(x.cat)}</span><div class="t"><div class="n">${esc(x.note||catName(x.cat))}</div><div class="c">${esc(catName(x.cat))} · ${esc(fday(x.date))}</div></div><span class="a">−${esc(eur(x.amount))}</span></div>`).join(''):'<div class="op" style="cursor:default"><div class="t c">Aucune dépense sur cette période.</div></div>')+`</div>`;
+  h+=`<div class="hd"><h2>${env?'Opérations · '+esc(env.name):'Opérations récentes'}</h2><button data-tab="exp">Tout voir</button></div><div class="list">`+(ops.length?ops.map(x=>`<div class="op" data-edit="${x.id}"><span class="av">${catIc(x.cat)}</span><div class="t"><div class="n">${esc(x.note||catName(x.cat))}</div><div class="c">${esc(catName(x.cat))} · ${x.amount<0?'Retour · ':''}${esc(fday(x.date))}</div></div><span class="a${x.amount<0?' pos':''}">${esc(expAmt(x.amount))}</span></div>`).join(''):'<div class="op" style="cursor:default"><div class="t c">Aucune dépense sur cette période.</div></div>')+`</div>`;
   const fp=c.fixed.filter(f=>f.paid).length+(c.bd&&c.bd.lex&&c.bd.cm?1:0),fn=c.fixed.length+(c.bd?1:0);
   h+=`<div class="hd"><h2>Charges fixes</h2><span>${fp}/${fn} · ${esc(eur(c.fixedPaid))} / ${esc(eur(c.fixedPlan))}</span></div><div class="list">`+c.fixed.map(f=>`<div class="op" style="cursor:default"><button class="chk ${f.paid?'on':''}" data-paid="${f.id}" aria-label="Payé">${f.paid?'✓':''}</button><div class="t"><div class="n">${esc(f.name)}</div></div><span class="a">${esc(eur(f.amount))}</span></div>`).join('')+
    (c.bd?`<div class="op" style="cursor:default"><button class="chk ${c.bd.lex&&c.bd.cm?'on':''}" data-bdfall="1" aria-label="Payé">${c.bd.lex&&c.bd.cm?'✓':c.bd.paid?'½':''}</button><div class="t"><div class="n">Plan Banque de France <span class="badge">${c.bd.i}/${st.bdf.n}</span></div></div><span class="a">${esc(eur(c.bd.due))}</span></div>`:'')+`</div>`;
