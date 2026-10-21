@@ -1,5 +1,5 @@
 /* Cache hors ligne : aucune requête vers un serveur tiers, aucune donnée envoyée. */
-var CACHE = 'budget-public-v2';
+var CACHE = 'budget-public-v3';
 var FICHIERS = ['./', './index.html', './calc.js', './manifest.webmanifest', './apple-touch-icon.png', './icon-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FICHIERS); }).then(function () { return self.skipWaiting(); }));

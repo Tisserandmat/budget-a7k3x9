@@ -49,7 +49,7 @@
     var ifm = G * p.txIFM;
     var iccp = (G - treizieme + ifm) * p.txCP;
     var brutSans = G, brutAvec = G + ifm + iccp;
-    var indemn = (c.nuit + c.samNuit) * p.panierNuit + c.paniersJour * p.panierJour + postes * p.transport;
+    var indemn = (c.nuit + c.samNuit) * p.panierNuit + (c.samMatin + c.samApm + c.paniersJour) * p.panierJour + postes * p.transport;
     function net(brut) {
       var cotis = p.txCotis * brut - p.txExoHS * hsBase;
       var netSocial = brut - cotis;
