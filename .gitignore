@@ -1,0 +1,5 @@
+.DS_Store
+test/fixtures/private/
+*.local.json
+profil.prive.json
+profil.local.json

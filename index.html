@@ -7,393 +7,76 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Budget">
-<meta name="theme-color" content="#121418">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'">
+<meta name="theme-color" content="#0e1014">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self' blob:;">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="apple-touch-icon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
 <title>Budget</title>
-<style>
-:root{--bg:#121418;--card:#1c1f26;--card2:#252933;--txt:#e9ecf1;--mut:#8b93a3;--acc:#20c997;--warn:#f0ad4e;--bad:#ff6b6b;--r:14px}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 8px}
-header h1{margin:0;font-size:22px}
-header .sub{color:var(--mut);font-size:13px}
-main{padding:0 12px calc(env(safe-area-inset-bottom) + 90px)}
-section{display:none}section.on{display:block}
-.card{background:var(--card);border-radius:var(--r);padding:14px;margin:10px 0}
-.card h2{margin:0 0 8px;font-size:17px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0}
-.row+.row{border-top:1px solid #2b303b}
-.mut{color:var(--mut);font-size:13px}
-.big{font-size:28px;font-weight:700}
-.acc{color:var(--acc)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-.cnt{display:flex;align-items:center;gap:6px}
-.cnt button{width:38px;height:38px;border-radius:50%;border:0;background:var(--card2);color:var(--txt);font-size:22px}
-.cnt span{min-width:28px;text-align:center;font-weight:700;font-size:18px}
-input,select,textarea{font:inherit;color:var(--txt);background:var(--card2);border:1px solid #333a47;border-radius:10px;padding:10px;width:100%;font-size:16px}
-label{display:block;margin:8px 0 4px;color:var(--mut);font-size:13px}
-.btn{display:block;width:100%;border:0;border-radius:12px;padding:13px;margin-top:10px;font:inherit;font-weight:600;background:var(--acc);color:#0d1a15}
-.btn.sec{background:var(--card2);color:var(--txt)}
-.btn.small{display:inline-block;width:auto;padding:7px 12px;margin:0;font-size:14px}
-.bar{height:8px;background:var(--card2);border-radius:6px;overflow:hidden;margin-top:6px}
-.bar>i{display:block;height:100%;background:var(--acc)}
-.bar.warn>i{background:var(--warn)}.bar.bad>i{background:var(--bad)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sw{position:relative;width:52px;height:32px;flex:none}.sw input{opacity:0;width:0;height:0}
-.sw i{position:absolute;inset:0;background:var(--card2);border-radius:20px;transition:.2s}
-.sw i:before{content:"";position:absolute;width:26px;height:26px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
-.sw input:checked+i{background:var(--acc)}.sw input:checked+i:before{transform:translateX(20px)}
-nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#171a20;border-top:1px solid #2b303b;padding-bottom:env(safe-area-inset-bottom);z-index:9}
-nav button{flex:1;border:0;background:none;color:var(--mut);font:inherit;font-size:11px;padding:8px 0 6px}
-nav button b{display:block;font-size:20px;font-weight:400}
-nav button.on{color:var(--acc)}
-table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;text-align:right}td:first-child,th:first-child{text-align:left}
-th{color:var(--mut);font-weight:500}
-.dep{font-size:14px}.dep .x{background:none;border:0;color:var(--bad);font-size:18px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 80px);background:var(--acc);color:#0d1a15;padding:10px 16px;border-radius:20px;font-weight:600;opacity:0;transition:.3s;pointer-events:none;z-index:20}
-.toast.on{opacity:1}
-.banner{background:#2a2410;border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:12px 14px;margin:10px 0;font-weight:600}
-</style>
+<script>
+try {
+  var brut = JSON.parse(localStorage.getItem('budget-v2') || '{}');
+  var theme = brut.theme;
+  var clair = theme === 'clair' || (theme !== 'sombre' && matchMedia('(prefers-color-scheme: light)').matches);
+  document.documentElement.setAttribute('data-theme', clair ? 'clair' : 'sombre');
+  var meta = document.querySelector('meta[name=theme-color]');
+  if (meta) meta.setAttribute('content', clair ? '#f3f5f8' : '#0e1014');
+} catch (e) {
+  document.documentElement.setAttribute('data-theme', 'sombre');
+}
+</script>
 </head>
 <body>
-<header><h1 id="titre">Paie</h1><div class="sub" id="soustitre"></div></header>
-<main>
-<div class="banner" id="banner" style="display:none">Importe ton profil (Réglages &gt; Importer)</div>
-
-<!-- ===== PAIE ===== -->
-<section id="s-paie" class="on">
-  <div class="card">
-    <h2>Postes du mois</h2>
-    <div id="compteurs"></div>
-    <div class="row"><div>Heures sup. (h)<div class="mut">au-delà de 35 h dans la semaine</div></div>
-      <div style="display:flex;gap:6px;align-items:center"><input id="hs25" inputmode="decimal" style="width:80px"><button class="btn small sec" id="hsPlus">+5 postes</button></div></div>
-    <div class="row"><div>Heures de jour férié (h)<div class="mut">+100 %</div></div><input id="ferie" inputmode="decimal" style="width:80px"></div>
-    <div class="row"><div>Paniers jour fériés<div class="mut">montant dans les Réglages</div></div><input id="paniersJour" inputmode="numeric" style="width:80px"></div>
-    <div class="row"><div>Avec IFM + congés payés<div class="mut">IFM et ICCP, versées en fin de contrat</div></div><label class="sw"><input type="checkbox" id="ifmcp"><i></i></label></div>
-    <div class="row"><div>Taux de PAS (%)</div><input id="pasSim" inputmode="decimal" style="width:80px"></div>
-    <button class="btn sec" id="raz">Remettre les compteurs à zéro</button>
-  </div>
-  <div class="card">
-    <h2>Estimation</h2>
-    <div class="mut">Net après PAS</div>
-    <div class="big acc" id="rNet">0 €</div>
-    <div id="rDetail"></div>
-  </div>
-  <div class="card">
-    <h2>Net par poste</h2>
-    <div id="tabPostes"></div>
-    <p class="mut">Estimations avec les taux des Réglages. Hors heures sup.</p>
-  </div>
-</section>
-
-<!-- ===== BUDGET ===== -->
-<section id="s-budget">
-  <div class="card">
-    <h2>Nouvelle dépense</h2>
-    <div class="grid2">
-      <div><label>Montant (€)</label><input id="dMontant" inputmode="decimal" placeholder="0,00"></div>
-      <div><label>Espace</label><select id="dEspace"></select></div>
+<div class="app">
+  <header>
+    <div class="top">
+      <div>
+        <small id="bonjour">Bonjour</small>
+        <h1 id="titre">Budget</h1>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="iconbtn" id="theme" aria-label="Changer le thème"></button>
+        <button type="button" class="avatar" id="reglages" aria-label="Réglages">•</button>
+      </div>
     </div>
-    <label>Note</label><input id="dNote" placeholder="ex. Lidl, McDo…" maxlength="80">
-    <button class="btn" id="dAjout">Ajouter</button>
-  </div>
-  <div class="card"><h2>Espaces du mois</h2><div class="mut" id="periodeTxt"></div><div id="espaces"></div></div>
-  <div class="card"><h2>Dernières dépenses</h2><div id="depenses"></div></div>
-  <div class="card"><h2>Mois précédents</h2><div id="historique" class="mut">Rien pour l'instant.</div></div>
-</section>
-
-<!-- ===== OBJECTIFS ===== -->
-<section id="s-obj">
-  <div id="objectifs"></div>
-  <div class="card">
-    <h2>Verser dans l'objectif</h2>
-    <label>Montant (€)</label><input id="vMontant" inputmode="decimal" placeholder="600">
-    <button class="btn" id="vAjout">Ajouter à l'objectif en cours</button>
-    <p class="mut">L'objectif 1 se remplit d'abord, le surplus passe à l'objectif 2.</p>
-    <label>Versement mensuel prévu (€)</label><input id="oMensuel" inputmode="decimal">
-  </div>
-  <div class="card"><h2>Versements</h2><div id="versements" class="mut"></div></div>
-</section>
-
-<!-- ===== CHARGES ===== -->
-<section id="s-charges">
-  <div class="card"><h2>Charges fixes (compte principal)</h2><div id="charges"></div>
-  <div class="grid2"><div><label>Nouvelle charge</label><input id="chNom" placeholder="Nom" maxlength="60"></div><div><label>Montant (€)</label><input id="chMontant" inputmode="decimal" placeholder="0,00"></div></div>
-  <button class="btn sec" id="chAjout">Ajouter la charge</button></div>
-</section>
-
-<!-- ===== RÉGLAGES ===== -->
-<section id="s-reglages">
-  <div class="card"><h2>Taux de paie</h2><div id="params"></div>
-    <button class="btn sec" id="paramsDefaut">Revenir aux valeurs par défaut</button></div>
-  <div class="card"><h2>Montants des Espaces</h2><div id="espacesEdit"></div></div>
-  <div class="card"><h2>Sauvegarde</h2>
-    <button class="btn" id="export">Exporter les données (JSON)</button>
-    <label>Importer un fichier JSON</label><input type="file" id="import" accept="application/json,.json">
-    <p class="mut">Tout reste dans ce téléphone (localStorage). Rien n'est envoyé nulle part. Pense à exporter de temps en temps.</p>
-  </div>
-</section>
-</main>
-
-<nav id="nav">
-  <button data-s="paie" class="on"><b>€</b>Paie</button>
-  <button data-s="budget"><b>▤</b>Budget</button>
-  <button data-s="obj"><b>◎</b>Objectifs</button>
-  <button data-s="charges"><b>≡</b>Charges</button>
-  <button data-s="reglages"><b>⚙</b>Réglages</button>
-</nav>
-<div class="toast" id="toast"></div>
-
+  </header>
+  <main>
+    <section id="s-accueil" class="on"></section>
+    <section id="s-planning"></section>
+    <section id="s-budget"></section>
+    <section id="s-objectifs"></section>
+  </main>
+  <nav id="nav">
+    <button type="button" data-tab="accueil" class="on" aria-label="Accueil">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2 3 10.5V20a1 1 0 0 0 1 1h5.5v-6h5v6H20a1 1 0 0 0 1-1v-9.5z"/></svg>
+      Accueil
+    </button>
+    <button type="button" data-tab="planning" aria-label="Planning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      Planning
+    </button>
+    <button type="button" data-tab="budget" aria-label="Budget">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6" width="19" height="13" rx="3"/><path d="M2.5 10.5h19"/></svg>
+      Budget
+    </button>
+    <button type="button" data-tab="objectifs" aria-label="Objectifs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>
+      Objectifs
+    </button>
+  </nav>
+</div>
+<div id="overlay" class="overlay" hidden></div>
+<div id="sheet" class="sheet" hidden></div>
+<div id="toast" class="toast" role="status"></div>
+<input type="file" id="fichier-profil" accept="application/json,.json" hidden>
+<input type="file" id="fichier-releve" accept=".csv,text/csv,.pdf,application/pdf" hidden>
+<input type="file" id="fichier-sauvegarde" accept="application/json,.json" hidden>
+<script src="periode.js"></script>
 <script src="calc.js"></script>
-<script>
-(function () {
-'use strict';
-var KEY = 'budget-v1';
-var C = window.PaieCalc;
-var LABELS = { matin: 'Matin', apm: 'Après-midi', nuit: 'Nuit', samMatin: 'Samedi matin', samApm: 'Samedi après-midi', samNuit: 'Samedi nuit' };
-var PARAM_LABELS = {
-  taux: 'Taux horaire brut (€)', heuresPoste: 'Heures payées par poste', nuitMatin: 'Heures de nuit dans un poste du matin',
-  nuitNuit: 'Heures de nuit dans un poste de nuit', nuitSamNuit: 'Heures de nuit dans un samedi nuit', majNuit: 'Majoration nuit (0,25 = 25 %)',
-  majSamApm: 'Majoration samedi après-midi', majSamMatin: 'Majoration samedi matin', majSamNuit: 'Majoration samedi nuit',
-  primeEquipe: "Prime d'équipe par poste (€)", panierNuit: 'Panier nuit (€)', panierJour: 'Panier jour (€)', transport: 'Indemnité transport par poste (€)',
-  tx13e: 'Prime 13e mois (0,0833 = 8,33 %)', txIFM: 'IFM (0,10 = 10 %)', txCP: 'Congés payés (0,10 = 10 %)', txCotis: 'Cotisations salariales / brut',
-  txExoHS: 'Exonération heures sup.', txCsgNonDed: 'CSG/CRDS non déductible', pas: 'Taux PAS (0,035 = 3,5 %)'
-};
-var ESPACES_DEFAUT = [ // exemples génériques, montants à définir
-  { id: 'objectif', nom: 'Objectifs (épargne)', montant: 0, objectif: true },
-  { id: 'filet', nom: 'Filet de sécurité', montant: 0 },
-  { id: 'courses', nom: 'Courses', montant: 0 },
-  { id: 'transport', nom: 'Transport', montant: 0 },
-  { id: 'loisirs', nom: 'Loisirs', montant: 0 }
-];
-var CHARGES_DEFAUT = [];
-
-function clone(o) { return JSON.parse(JSON.stringify(o)); }
-function etatDefaut() {
-  return { v: 1, params: clone(C.DEFAULTS), ifmcp: true,
-    sim: { matin: 0, apm: 0, nuit: 0, samMatin: 0, samApm: 0, samNuit: 0, hs25: 0, ferie: 0, paniersJour: 0 },
-    espaces: clone(ESPACES_DEFAUT), depenses: [], periode: null, historique: [],
-    objectifs: { obj1: { nom: 'Objectif 1', cible: 0 }, obj2: { nom: 'Objectif 2', cible: 0 }, epargne: 0, mensuel: 0 },
-    versements: [], charges: clone(CHARGES_DEFAUT) };
-}
-var S;
-var aucuneDonnee = false;
-function charger() {
-  var brut = null; try { brut = localStorage.getItem(KEY); S = JSON.parse(brut); } catch (e) { S = null; }
-  aucuneDonnee = !brut;
-  var d = etatDefaut();
-  if (!S || typeof S !== 'object') S = d;
-  Object.keys(d).forEach(function (k) { if (S[k] === undefined) S[k] = d[k]; });
-  S.params = Object.assign({}, C.DEFAULTS, S.params);
-  S.sim = Object.assign({}, d.sim, S.sim);
-  var O = S.objectifs || d.objectifs;
-  O.obj1 = O.obj1 || d.objectifs.obj1; O.obj2 = O.obj2 || d.objectifs.obj2; S.objectifs = O;
-  var b = document.getElementById('banner');
-  if (b) b.style.display = (aucuneDonnee || (!S.params.taux && !S.charges.length)) ? 'block' : 'none';
-}
-function sauver() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Stockage plein ou bloqué'); } }
-
-var fmt = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
-function eur(x) { return fmt.format(x || 0); }
-function num(v) { var n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? n : 0; }
-function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function $(id) { return document.getElementById(id); }
-function toast(t) { var e = $('toast'); e.textContent = t; e.classList.add('on'); setTimeout(function () { e.classList.remove('on'); }, 1600); }
-function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-var MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-function dateFr(s) { var p = s.split('-'); return parseInt(p[2], 10) + ' ' + MOIS[parseInt(p[1], 10) - 1] + ' ' + p[0]; }
-
-/* --- Période budgétaire : du 11 au 10 --- */
-function debutPeriode(d) { var y = d.getFullYear(), m = d.getMonth(); if (d.getDate() < 11) m -= 1; return iso(new Date(y, m, 11)); }
-function verifierPeriode() {
-  var p = debutPeriode(new Date());
-  if (S.periode && S.periode !== p) {
-    var tot = {}; S.depenses.forEach(function (x) { tot[x.espace] = (tot[x.espace] || 0) + x.montant; });
-    S.historique.unshift({ periode: S.periode, totaux: tot, total: S.depenses.reduce(function (a, x) { return a + x.montant; }, 0) });
-    S.historique = S.historique.slice(0, 24);
-    S.depenses = [];
-    setTimeout(function () { toast('Nouveau mois : Espaces remis à zéro'); }, 400);
-  }
-  S.periode = p; sauver();
-}
-
-/* --- PAIE --- */
-function rendrePaie() {
-  var h = '';
-  C.TYPES.forEach(function (t) {
-    h += '<div class="row"><div>' + LABELS[t] + '</div><div class="cnt"><button data-t="' + t + '" data-d="-1">−</button><span id="c-' + t + '">' + S.sim[t] + '</span><button data-t="' + t + '" data-d="1">+</button></div></div>';
-  });
-  $('compteurs').innerHTML = h;
-  $('hs25').value = S.sim.hs25 || ''; $('ferie').value = S.sim.ferie || ''; $('paniersJour').value = S.sim.paniersJour || '';
-  $('ifmcp').checked = !!S.ifmcp; $('pasSim').value = String(Math.round(S.params.pas * 10000) / 100).replace('.', ',');
-  calculer();
-}
-function calculer() {
-  var r = C.simuler(S.params, S.sim, { ifmcp: S.ifmcp });
-  $('rNet').textContent = eur(r.netApresPAS);
-  $('rDetail').innerHTML =
-    '<div class="row"><span>Postes</span><b>' + r.postes + '</b></div>' +
-    '<div class="row"><span>Brut estimé</span><b>' + eur(r.brut) + '</b></div>' +
-    '<div class="row"><span>Cotisations salariales</span><span>− ' + eur(r.cotisations) + '</span></div>' +
-    '<div class="row"><span>Paniers + transport (non imposables)</span><span>+ ' + eur(r.indemnites) + '</span></div>' +
-    '<div class="row"><span>Net avant impôt</span><b>' + eur(r.netAvantImpot) + '</b></div>' +
-    '<div class="row"><span>PAS (' + (S.params.pas * 100).toFixed(1).replace('.', ',') + ' % sur ' + eur(r.netImposable) + ')</span><span>− ' + eur(r.pas) + '</span></div>' +
-    '<div class="row"><span>Dont IFM + CP (net)</span><span>' + (S.ifmcp ? eur(r.partIFMCPnet) : 'non incluses (' + eur(r.partIFMCPnet) + ')') + '</span></div>' +
-    '<p class="mut">Acomptes déjà touchés à déduire de ce que tu recevras le 9. IFM et CP arrivent à la fin de chaque contrat.</p>';
-  var pp = C.parPoste(S.params);
-  var t = '<table><tr><th>Poste</th><th>Sans IFM/CP</th><th>Avec</th></tr>';
-  C.TYPES.forEach(function (k) { t += '<tr><td>' + LABELS[k] + '</td><td>' + eur(pp[k].sans.netApresPAS) + '</td><td><b>' + eur(pp[k].avec.netApresPAS) + '</b></td></tr>'; });
-  $('tabPostes').innerHTML = t + '</table>';
-  $('soustitre').textContent = 'Net estimé ce mois : ' + eur(r.netApresPAS);
-}
-
-/* --- BUDGET --- */
-function depensesPar() { var m = {}; S.depenses.forEach(function (x) { m[x.espace] = (m[x.espace] || 0) + x.montant; }); return m; }
-function nomEspace(id) { var e = S.espaces.filter(function (x) { return x.id === id; })[0]; return e ? e.nom : id; }
-function rendreBudget() {
-  $('dEspace').innerHTML = S.espaces.filter(function (e) { return !e.objectif; }).map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.nom) + '</option>'; }).join('');
-  $('dEspace').value = 'courses';
-  var fin = new Date(S.periode + 'T12:00:00'); fin.setMonth(fin.getMonth() + 1); fin.setDate(10);
-  $('periodeTxt').textContent = 'Du ' + dateFr(S.periode) + ' au ' + dateFr(iso(fin)) + ' · remise à zéro le 11';
-  var dp = depensesPar(), h = '', totM = 0, totD = 0;
-  S.espaces.forEach(function (e) {
-    if (e.objectif) { h += '<div class="row"><div>' + esc(e.nom) + '<div class="mut">' + eur(e.montant) + ' / mois · voir Objectifs</div></div></div>'; return; }
-    var d = dp[e.id] || 0, reste = e.montant - d, pc = e.montant > 0 ? Math.min(100, 100 * d / e.montant) : (d > 0 ? 100 : 0);
-    var cls = reste < 0 ? 'bad' : (pc >= 80 ? 'warn' : '');
-    totM += e.montant; totD += d;
-    h += '<div class="row" style="display:block"><div style="display:flex;justify-content:space-between"><span>' + esc(e.nom) + '</span><b class="' + (reste < 0 ? 'bad' : '') + '">' + eur(reste) + '</b></div>' +
-      '<div class="bar ' + cls + '"><i style="width:' + pc + '%"></i></div><div class="mut">' + eur(d) + ' dépensés sur ' + eur(e.montant) + (reste < 0 ? ' · dépassé, stop jusqu\u2019au 11' : '') + '</div></div>';
-  });
-  h += '<div class="row"><b>Total enveloppes</b><b>' + eur(totM - totD) + ' restants</b></div>';
-  $('espaces').innerHTML = h;
-  var l = S.depenses.slice().reverse().slice(0, 50);
-  $('depenses').innerHTML = l.length ? l.map(function (x) {
-    return '<div class="row dep"><div>' + eur(x.montant) + ' · ' + esc(nomEspace(x.espace)) + '<div class="mut">' + dateFr(x.date) + (x.note ? ' · ' + esc(x.note) : '') + '</div></div><button class="x" data-del="' + x.id + '">✕</button></div>';
-  }).join('') : '<div class="mut">Aucune dépense ce mois-ci.</div>';
-  $('historique').innerHTML = S.historique.length ? S.historique.map(function (hh) {
-    return '<div class="row"><span>Depuis le ' + dateFr(hh.periode) + '</span><b>' + eur(hh.total) + '</b></div>';
-  }).join('') : 'Rien pour l\u2019instant.';
-}
-
-/* --- OBJECTIFS --- */
-function ajoutMois(n) { var d = new Date(); if (d.getDate() >= 11) d.setMonth(d.getMonth() + 1); d.setDate(11); d.setMonth(d.getMonth() + n - 1); return MOIS[d.getMonth()] + ' ' + d.getFullYear(); }
-function rendreObjectifs() {
-  var O = S.objectifs, ep = O.epargne, m = Math.max(1, O.mensuel || 0);
-  var eT = Math.min(ep, O.obj1.cible), eM = Math.max(0, Math.min(ep - O.obj1.cible, O.obj2.cible));
-  var resteT = O.obj1.cible - eT, resteM = O.obj2.cible - eM;
-  var moisT = Math.ceil(resteT / m), moisM = Math.ceil((resteT + resteM) / m);
-  function carte(o, e, key, reste, mois) {
-    var pc = o.cible > 0 ? Math.round(100 * e / o.cible) : 0;
-    return '<div class="card"><h2>' + esc(o.nom) + '</h2><div class="big ' + (reste <= 0 ? 'acc' : '') + '">' + pc + ' %</div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, pc) + '%"></i></div>' +
-      '<div class="row"><span>Épargné</span><b>' + eur(e) + '</b></div><div class="row"><span>Reste</span><b>' + eur(Math.max(0, reste)) + '</b></div>' +
-      '<div class="row"><span>Date estimée</span><b>' + (o.cible <= 0 ? 'cible à définir' : reste <= 0 ? 'Atteint ✅' : !O.mensuel ? 'versement mensuel à définir' : ajoutMois(mois)) + '</b></div>' +
-      '<label>Cible (€)</label><input data-cible="' + key + '" inputmode="decimal" value="' + String(o.cible).replace('.', ',') + '"></div>';
-  }
-  $('objectifs').innerHTML = carte(O.obj1, eT, 'obj1', resteT, moisT) + carte(O.obj2, eM, 'obj2', resteM, moisM) +
-    '<p class="mut" style="padding:0 4px">Date estimée à ' + eur(O.mensuel) + '/mois, versement le 11. Le balayage du 8 peut l\u2019avancer.</p>';
-  $('oMensuel').value = String(O.mensuel).replace('.', ',');
-  
-  $('versements').innerHTML = S.versements.length ? S.versements.slice().reverse().map(function (v, i) {
-    return '<div class="row dep"><div>' + eur(v.montant) + '<div class="mut">' + dateFr(v.date) + '</div></div><button class="x" data-vdel="' + (S.versements.length - 1 - i) + '">✕</button></div>';
-  }).join('') : 'Aucun versement enregistré.';
-}
-
-/* --- CHARGES --- */
-function rendreCharges() {
-  var tot = 0, h = '';
-  if (!S.charges.length) h = '<div class="mut">Aucune charge. Ajoute-les ci-dessous ou importe ton profil.</div>';
-  S.charges.forEach(function (c, i) { tot += c.montant; h += '<div class="row"><span>' + esc(c.nom) + '</span><span style="display:flex;gap:6px;align-items:center"><input data-ch="' + i + '" inputmode="decimal" style="width:100px;text-align:right" value="' + c.montant.toFixed(2).replace('.', ',') + '"><button class="x" style="background:none;border:0;color:var(--bad);font-size:18px" data-chdel="' + i + '">✕</button></span></div>'; });
-  h += '<div class="row"><b>Total</b><b>' + eur(tot) + '</b></div>';
-  $('charges').innerHTML = h;
-}
-
-/* --- RÉGLAGES --- */
-function rendreReglages() {
-  $('params').innerHTML = Object.keys(C.DEFAULTS).map(function (k) {
-    return '<label>' + PARAM_LABELS[k] + ' <span class="mut">(défaut : ' + String(C.DEFAULTS[k]).replace('.', ',') + ')</span></label><input data-p="' + k + '" inputmode="decimal" value="' + String(S.params[k]).replace('.', ',') + '">';
-  }).join('');
-  $('espacesEdit').innerHTML = S.espaces.map(function (e, i) {
-    return '<div class="row"><span>' + esc(e.nom) + '</span><input data-esp="' + i + '" inputmode="decimal" style="width:100px;text-align:right" value="' + String(e.montant).replace('.', ',') + '"></div>';
-  }).join('');
-}
-
-function tout() { rendrePaie(); rendreBudget(); rendreObjectifs(); rendreCharges(); rendreReglages(); }
-
-/* --- Événements --- */
-var TITRES = { paie: 'Paie', budget: 'Budget du mois', obj: 'Objectifs', charges: 'Charges fixes', reglages: 'Réglages' };
-$('nav').addEventListener('click', function (ev) {
-  var b = ev.target.closest('button'); if (!b) return;
-  document.querySelectorAll('nav button').forEach(function (x) { x.classList.toggle('on', x === b); });
-  document.querySelectorAll('section').forEach(function (s) { s.classList.toggle('on', s.id === 's-' + b.dataset.s); });
-  $('titre').textContent = TITRES[b.dataset.s]; window.scrollTo(0, 0);
-  if (b.dataset.s === 'budget') { verifierPeriode(); rendreBudget(); }
-});
-$('compteurs').addEventListener('click', function (ev) {
-  var b = ev.target.closest('button'); if (!b) return;
-  var t = b.dataset.t; S.sim[t] = Math.max(0, (S.sim[t] || 0) + parseInt(b.dataset.d, 10));
-  $('c-' + t).textContent = S.sim[t]; sauver(); calculer();
-});
-['hs25', 'ferie', 'paniersJour'].forEach(function (id) { $(id).addEventListener('input', function () { S.sim[id] = Math.max(0, num(this.value)); sauver(); calculer(); }); });
-$('hsPlus').addEventListener('click', function () { S.sim.hs25 = Math.round(((S.sim.hs25 || 0) + Math.max(0, 5 * S.params.heuresPoste - 35)) * 100) / 100; $('hs25').value = String(S.sim.hs25).replace('.', ','); sauver(); calculer(); });
-$('ifmcp').addEventListener('change', function () { S.ifmcp = this.checked; sauver(); calculer(); });
-$('pasSim').addEventListener('input', function () { S.params.pas = Math.max(0, num(this.value)) / 100; sauver(); calculer(); rendreReglages(); });
-$('raz').addEventListener('click', function () { if (!confirm('Remettre les compteurs à zéro ?')) return; C.TYPES.concat(['hs25', 'ferie', 'paniersJour']).forEach(function (k) { S.sim[k] = 0; }); sauver(); rendrePaie(); });
-
-$('dAjout').addEventListener('click', function () {
-  var m = num($('dMontant').value); if (m <= 0) { toast('Montant ?'); return; }
-  verifierPeriode();
-  S.depenses.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date: iso(new Date()), montant: Math.round(m * 100) / 100, espace: $('dEspace').value, note: $('dNote').value.trim().slice(0, 80) });
-  sauver(); $('dMontant').value = ''; $('dNote').value = ''; rendreBudget(); toast('Dépense ajoutée');
-});
-$('depenses').addEventListener('click', function (ev) {
-  var b = ev.target.closest('[data-del]'); if (!b || !confirm('Supprimer cette dépense ?')) return;
-  S.depenses = S.depenses.filter(function (x) { return x.id !== b.dataset.del; }); sauver(); rendreBudget();
-});
-
-$('vAjout').addEventListener('click', function () {
-  var m = num($('vMontant').value); if (m === 0) { toast('Montant ?'); return; }
-  S.versements.push({ date: iso(new Date()), montant: Math.round(m * 100) / 100 });
-  S.objectifs.epargne = Math.round((S.objectifs.epargne + m) * 100) / 100; sauver(); $('vMontant').value = ''; rendreObjectifs(); toast('Versement ajouté');
-});
-$('versements').addEventListener('click', function (ev) {
-  var b = ev.target.closest('[data-vdel]'); if (!b || !confirm('Supprimer ce versement ?')) return;
-  var v = S.versements.splice(parseInt(b.dataset.vdel, 10), 1)[0];
-  S.objectifs.epargne = Math.round((S.objectifs.epargne - v.montant) * 100) / 100; sauver(); rendreObjectifs();
-});
-$('oMensuel').addEventListener('change', function () { S.objectifs.mensuel = Math.max(0, num(this.value)); sauver(); rendreObjectifs(); });
-$('objectifs').addEventListener('change', function (ev) { var k = ev.target.dataset.cible; if (!k) return; S.objectifs[k].cible = Math.max(0, num(ev.target.value)); sauver(); rendreObjectifs(); });
-
-$('chAjout').addEventListener('click', function () {
-  var n = $('chNom').value.trim().slice(0, 60), m = num($('chMontant').value); if (!n) { toast('Nom ?'); return; }
-  S.charges.push({ nom: n, montant: Math.max(0, Math.round(m * 100) / 100) }); sauver(); $('chNom').value = ''; $('chMontant').value = ''; rendreCharges(); charger(); });
-$('charges').addEventListener('click', function (ev) { var b = ev.target.closest('[data-chdel]'); if (!b || !confirm('Supprimer cette charge ?')) return; S.charges.splice(parseInt(b.dataset.chdel, 10), 1); sauver(); rendreCharges(); });
-$('charges').addEventListener('change', function (ev) { var i = ev.target.dataset.ch; if (i === undefined) return; S.charges[i].montant = Math.max(0, num(ev.target.value)); sauver(); rendreCharges(); });
-$('params').addEventListener('change', function (ev) { var k = ev.target.dataset.p; if (!k) return; S.params[k] = Math.max(0, num(ev.target.value)); sauver(); charger(); rendrePaie(); });
-$('espacesEdit').addEventListener('change', function (ev) { var i = ev.target.dataset.esp; if (i === undefined) return; S.espaces[i].montant = Math.max(0, num(ev.target.value)); sauver(); rendreBudget(); });
-$('paramsDefaut').addEventListener('click', function () { if (!confirm('Revenir aux valeurs par défaut ?')) return; S.params = clone(C.DEFAULTS); sauver(); tout(); });
-
-$('export').addEventListener('click', function () {
-  var blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'budget-' + iso(new Date()) + '.json';
-  document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-});
-$('import').addEventListener('change', function () {
-  var f = this.files[0]; if (!f) return;
-  var rd = new FileReader();
-  rd.onload = function () {
-    try { var d = JSON.parse(rd.result); if (!d || d.v !== 1 || !Array.isArray(d.espaces)) throw new Error('format');
-      if (!confirm('Remplacer toutes les données actuelles par ce fichier ?')) return;
-      localStorage.setItem(KEY, JSON.stringify(d)); charger(); verifierPeriode(); tout(); toast('Données importées');
-    } catch (e) { alert('Fichier invalide.'); }
-  };
-  rd.readAsText(f); this.value = '';
-});
-
-charger(); verifierPeriode(); tout();
-if ('serviceWorker' in navigator && location.protocol !== 'file:') { navigator.serviceWorker.register('service-worker.js').catch(function () {}); }
-})();
-</script>
+<script src="classement.js"></script>
+<script src="csv.js"></script>
+<script src="modele.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
