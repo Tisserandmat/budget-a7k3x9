@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/budget-profil.schema.json",
+  "title": "Profil Budget",
+  "description": "Profil privé importé dans l'app. Le dépôt public ne contient que ce schéma et profil.exemple.json (valeurs fictives). Ne versionnez jamais un profil réel.",
+  "type": "object",
+  "required": ["type", "paie", "poches"],
+  "additionalProperties": true,
+  "properties": {
+    "type": { "const": "budget-profil" },
+    "version": { "type": "integer", "const": 1 },
+    "exemple": { "type": "boolean", "description": "Vrai seulement pour le profil fictif du dépôt." },
+    "prenom": { "type": "string", "description": "Prénom affiché. Vide si vous ne voulez pas le montrer." },
+    "initiales": { "type": "string", "maxLength": 3 },
+    "equipe": { "type": "string", "description": "Nom affiché au-dessus du planning." },
+    "tresorier": {
+      "type": "object",
+      "description": "Destinataire suggéré du bouton Envoyer à Trésorier. Rien n'est envoyé tout seul.",
+      "properties": {
+        "nom": { "type": "string" },
+        "email": { "type": "string" }
+      }
+    },
+    "tampon": { "type": "number", "minimum": 0, "description": "Minimum à garder sur le compte courant. Alerte en dessous. Le 8, le surplus part vers l'objectif." },
+    "paie": {
+      "type": "object",
+      "description": "Paramètres du moteur. Tous les montants et taux viennent d'ici.",
+      "properties": {
+        "taux": { "type": "number", "description": "Euro brut par heure." },
+        "heuresPoste": { "type": "number", "description": "Heures payées d'un poste horaire." },
+        "heuresJournee": { "type": "number", "description": "Heures d'un poste Journée, pour le seuil d'heures sup. seulement." },
+        "nuitMatin": { "type": "number", "description": "Heures de nuit dans un matin (poste commencé tôt)." },
+        "nuitNuit": { "type": "number" },
+        "nuitSamNuit": { "type": "number" },
+        "majNuit": { "type": "number", "description": "0,25 = 25 %." },
+        "majSamMatin": { "type": "number" },
+        "majSamApm": { "type": "number" },
+        "majSamNuit": { "type": "number", "description": "En plus de la majoration de nuit." },
+        "majFerie": { "type": "number", "description": "1 = +100 %. Hors base du 13e, dans la base IFM et CP." },
+        "primeEquipe": { "type": "number", "description": "Euros par poste horaire. Entre dans le 13e." },
+        "panierNuit": { "type": "number" },
+        "panierJour": { "type": "number", "description": "Samedi de jour ou férié travaillé. Un seul panier si les deux se cumulent." },
+        "transport": { "type": "number", "description": "Euros par poste horaire, non imposable." },
+        "tx13e": { "type": "number" },
+        "txIFM": { "type": "number" },
+        "txCP": { "type": "number" },
+        "txCotis": { "type": "number" },
+        "txExoHS": { "type": "number" },
+        "txCsgNonDed": { "type": "number" },
+        "pas": { "type": "number", "description": "Prélèvement à la source. 0,02 = 2 %." },
+        "hs1Seuil": { "type": "number", "description": "Heures par semaine civile avant majoration." },
+        "hs2Seuil": { "type": "number" },
+        "majHS1": { "type": "number" },
+        "majHS2": { "type": "number" },
+        "journeeNet": { "type": "number", "description": "Net après PAS, tout compris, d'un poste Journée." },
+        "journeeBrut": { "type": "number" }
+      }
+    },
+    "fixes": {
+      "type": "array",
+      "description": "Charges qui restent sur le compte courant.",
+      "items": {
+        "type": "object",
+        "required": ["nom", "montant"],
+        "properties": {
+          "id": { "type": "string" },
+          "nom": { "type": "string" },
+          "montant": { "type": "number" },
+          "jour": { "type": "integer", "minimum": 1, "maximum": 28, "description": "Jour du prélèvement. Du 9 au 28 : mois de début. Du 1 au 8 : mois suivant." }
+        }
+      }
+    },
+    "poches": {
+      "type": "array",
+      "description": "Enveloppes virées le 11. Identifiants conventionnels pour les mots-clés : courses, essence, restau, perso, voiture, vape, activites, amendes, filet.",
+      "items": {
+        "type": "object",
+        "required": ["id", "nom", "budget"],
+        "properties": {
+          "id": { "type": "string" },
+          "nom": { "type": "string" },
+          "court": { "type": "string" },
+          "budget": { "type": "number" },
+          "jour": { "type": "integer", "description": "11 pour les enveloppes virées le 11." },
+          "role": { "enum": ["depense", "reserve", "exception"], "description": "depense entre dans Reste à dépenser. reserve = filet avec plafond. exception = hors reste (amendes)." },
+          "plafond": { "type": "number" },
+          "solde": { "type": "number", "description": "Solde déjà atteint du filet, pour respecter le plafond." }
+        }
+      }
+    },
+    "objectifs": {
+      "type": "array",
+      "description": "Dans l'ordre. Le versement du 12 va au premier objectif non atteint.",
+      "items": {
+        "type": "object",
+        "required": ["nom", "cible"],
+        "properties": {
+          "id": { "type": "string" },
+          "nom": { "type": "string" },
+          "cible": { "type": "number" },
+          "mensuel": { "type": "number" },
+          "epargne": { "type": "number", "description": "Déjà mis de côté au moment de l'import." },
+          "jour": { "type": "integer" }
+        }
+      }
+    },
+    "regles": {
+      "type": "array",
+      "description": "Règles personnelles par commerçant. Elles l'emportent sur les mots-clés du code. contient est cherché dans le bénéficiaire et la référence.",
+      "items": {
+        "type": "object",
+        "required": ["contient", "poche"],
+        "properties": {
+          "contient": { "type": "string" },
+          "poche": { "type": "string" },
+          "actif": { "type": "boolean" }
+        }
+      }
+    },
+    "horaires": {
+      "type": "object",
+      "description": "Libellés de la légende du planning.",
+      "properties": {
+        "M": { "type": "string" },
+        "AM": { "type": "string" },
+        "N": { "type": "string" },
+        "J": { "type": "string" }
+      }
+    },
+    "planning": {
+      "type": "object",
+      "description": "Dates AAAA-MM-JJ vers M, AM, N, J ou R. Un samedi est affiché Sam. M, Sam. AM ou Sam. N.",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}
