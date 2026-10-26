@@ -1,5 +1,5 @@
 /* Cache hors ligne : aucune requête vers un serveur tiers, aucune donnée envoyée. */
-var CACHE = 'budget-public-v5';
+var CACHE = 'budget-public-v6';
 var FICHIERS = [
   './',
   './index.html',

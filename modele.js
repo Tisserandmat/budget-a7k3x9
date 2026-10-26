@@ -42,6 +42,85 @@
     };
   }
 
+  function surchargeVide() {
+    return { fixes: null, poches: {}, objectifs: {}, tampon: null };
+  }
+
+  /* Les saisies locales remplacent le profil importé, champ par champ. */
+  function appliquerSurcharge(profilIn, surcharge) {
+    var profil = normaliserProfil(profilIn);
+    var s = surcharge || {};
+    if (s.tampon != null && s.tampon !== '') profil.tampon = Math.max(0, num(s.tampon));
+    if (Array.isArray(s.fixes)) {
+      profil.fixes = s.fixes.map(function (f, i) {
+        var jour = Math.round(num(f.jour) || 1);
+        if (jour < 1) jour = 1;
+        if (jour > 28) jour = 28;
+        return {
+          id: f.id || ('fixe-' + (i + 1)),
+          nom: String(f.nom || 'Charge').slice(0, 80),
+          montant: r2(Math.max(0, num(f.montant))),
+          jour: jour
+        };
+      });
+    }
+    var pochesS = s.poches && typeof s.poches === 'object' ? s.poches : {};
+    profil.poches = profil.poches.map(function (p) {
+      var e = pochesS[p.id];
+      if (!e) return p;
+      var o = Object.assign({}, p);
+      if (e.budget != null && e.budget !== '') o.budget = r2(Math.max(0, num(e.budget)));
+      if (e.plafond != null && e.plafond !== '') o.plafond = r2(Math.max(0, num(e.plafond)));
+      if (e.nom) o.nom = String(e.nom).slice(0, 80);
+      return o;
+    });
+    var objS = s.objectifs && typeof s.objectifs === 'object' ? s.objectifs : {};
+    profil.objectifs = profil.objectifs.map(function (o, i) {
+      var e = objS[o.id] || {};
+      var n = Object.assign({}, o);
+      if (e.cible != null && e.cible !== '') n.cible = r2(Math.max(0, num(e.cible)));
+      if (e.mensuel != null && e.mensuel !== '') n.mensuel = r2(Math.max(0, num(e.mensuel)));
+      if (e.epargne != null && e.epargne !== '') n.epargne = r2(num(e.epargne));
+      if (e.nom) n.nom = String(e.nom).slice(0, 80);
+      n.ordre = e.ordre != null && e.ordre !== '' ? num(e.ordre) : (i + 1);
+      return n;
+    });
+    profil.objectifs.sort(function (a, b) { return a.ordre - b.ordre || 0; });
+    return profil;
+  }
+
+  function normNom(s) {
+    return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  function cleMouvement(m) {
+    var ref = String((m && m.reference) || '').replace(/\s+/g, ' ').trim();
+    return [(m && m.date) || '', r2(num(m && m.montant)).toFixed(2), normNom(m && m.partenaire), ref].join('|');
+  }
+  /* Un doublon = même date, montant, libellé et référence qu'un mouvement déjà gardé,
+     ou qu'une ligne précédente du même fichier. */
+  function marquerDoublons(lignes, existants) {
+    var vus = {};
+    (existants || []).forEach(function (m) {
+      var k = cleMouvement(m);
+      vus[k] = (vus[k] || 0) + 1;
+    });
+    return (lignes || []).map(function (l) {
+      var k = cleMouvement(l);
+      var o = Object.assign({}, l);
+      o.doublon = !!vus[k];
+      vus[k] = (vus[k] || 0) + 1;
+      return o;
+    });
+  }
+  function lignesAImporter(lignes) {
+    return (lignes || []).filter(function (l) {
+      if (l.hors) return false;
+      if (l.doublon && !l.forcer) return false;
+      if (!l.ignore && l.categorie !== 'revenu' && !l.poche) return false;
+      return true;
+    });
+  }
+
   function planningEffectif(profil, local) {
     var o = Object.assign({}, (profil && profil.planning) || {});
     Object.keys(local || {}).forEach(function (k) {
@@ -81,8 +160,8 @@
 
   function bilan(profilIn, etat, per) {
     var d = deps();
-    var profil = normaliserProfil(profilIn);
     etat = etat || {};
+    var profil = appliquerSurcharge(profilIn, etat.surcharge);
     var planning = planningEffectif(profil, etat.planningLocal);
     var paie = d.C.calculerMois(profil.paie, planning, per.annee, per.mois);
     var prec = d.P.moisPrecedent(per);
@@ -199,6 +278,10 @@
 
   return {
     normaliserProfil: normaliserProfil,
+    appliquerSurcharge: appliquerSurcharge,
+    cleMouvement: cleMouvement,
+    marquerDoublons: marquerDoublons,
+    lignesAImporter: lignesAImporter,
     planningEffectif: planningEffectif,
     budgetPoche: budgetPoche,
     mouvementsMois: mouvementsMois,
