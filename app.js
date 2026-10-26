@@ -16,7 +16,9 @@
     return {
       v: 2, theme: 'auto', profil: null, reglesLocales: [], planningLocal: {},
       mouvements: [], versements: [], balayages: [], bulletins: {}, dettes: [],
-      filetSolde: null, moisVu: null, moisPlanning: null
+      filetSolde: null, moisVu: null, moisPlanning: null,
+      surcharge: { fixes: null, poches: {}, objectifs: {}, tampon: null },
+      filtrePoche: '', rechercheMvt: ''
     };
   }
   var S = etatVide();
@@ -25,6 +27,9 @@
     try {
       var brut = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (brut && brut.v === 2) S = Object.assign(etatVide(), brut);
+      if (!S.surcharge || typeof S.surcharge !== 'object') S.surcharge = { fixes: null, poches: {}, objectifs: {}, tampon: null };
+      if (!S.surcharge.poches) S.surcharge.poches = {};
+      if (!S.surcharge.objectifs) S.surcharge.objectifs = {};
     } catch (e) { S = etatVide(); }
     if (!S.profil) {
       try {
@@ -286,7 +291,8 @@
     var extra = '';
     if (p.role === 'reserve') extra = '<div class="t">plafond ' + eur(p.plafond) + (p.solde != null ? ' · déjà ' + eur(p.solde) : '') + '</div>';
     if (p.role === 'exception') extra = '<div class="t">hors reste à dépenser</div>';
-    return '<article class="env wide"><div class="n">' + esc(p.nom) + '</div>' + extra +
+    return '<article class="env wide"><div class="row"><div class="n">' + esc(p.nom) + '</div>' +
+      '<button type="button" class="lien" data-edit="poche" data-id="' + esc(p.id) + '">Modifier</button></div>' + extra +
       '<div class="trois"><div><span class="mut">Budget</span><b>' + eur(p.budget) + '</b></div>' +
       '<div><span class="mut">Dépensé</span><b>' + eur(p.depense) + '</b></div>' +
       '<div><span class="mut">Reste</span><b class="' + (p.reste < 0 ? 'neg' : '') + '">' + eur(p.reste) + '</b></div></div>' +
@@ -303,18 +309,44 @@
     return h;
   }
 
-  function htmlMouvements(per) {
-    var liste = (S.mouvements || []).filter(function (m) { return m.date >= per.debut && m.date <= per.fin && !m.ignore; })
-      .slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
-    if (!liste.length) return '<p class="empty">Aucun mouvement sur ce mois. Importe un relevé ou ajoute une dépense.</p>';
+  function mouvementsFiltres(per) {
+    var q = K.norm(S.rechercheMvt || '');
+    return (S.mouvements || []).filter(function (m) {
+      if (!m || m.date < per.debut || m.date > per.fin) return false;
+      var fp = S.filtrePoche || '';
+      if (fp === 'interne') {
+        if (!(m.ignore || m.categorie === 'interne')) return false;
+      } else if (fp) {
+        if (m.poche !== fp || m.ignore) return false;
+      }
+      if (q && K.norm((m.partenaire || '') + ' ' + (m.reference || '') + ' ' + (m.motif || '')).indexOf(q) < 0) return false;
+      return true;
+    }).slice().sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  }
+  function htmlListeMouvements(per) {
+    var liste = mouvementsFiltres(per);
+    if (!liste.length) return '<p class="empty">Aucun mouvement pour ce filtre.</p>';
     return liste.map(function (m) {
       var signe = m.montant > 0 ? '+' : '−';
-      return '<div class="mv"><div class="top"><div><div class="qui">' + esc(m.partenaire || 'Dépense') + '</div>' +
-        '<div class="mut">' + esc(P.dateCourte(m.date)) + (m.motif ? ' · ' + esc(m.motif) : '') + '</div></div>' +
-        '<b>' + signe + eur(Math.abs(m.montant)) + '</b></div>' +
-        (m.categorie === 'revenu' ? '' : '<select data-mvt="' + esc(m.id) + '" aria-label="Poche">' + optionsPoches(m.poche) + '</select>') +
-        '</div>';
+      var interne = m.ignore || m.categorie === 'interne';
+      var detail = P.dateCourte(m.date) + (m.motif ? ' · ' + m.motif : '');
+      if (interne) detail += ' · hors dépenses';
+      var select = (interne || m.categorie === 'revenu') ? '' :
+        '<select data-mvt="' + esc(m.id) + '" aria-label="Poche de ' + esc(m.partenaire || 'mouvement') + '">' + optionsPoches(m.poche) + '</select>';
+      return '<div class="mv' + (interne ? ' dup' : '') + '"><div class="top"><div><div class="qui">' + esc(m.partenaire || 'Dépense') + '</div>' +
+        '<div class="mut">' + esc(detail) + '</div></div><b>' + signe + eur(Math.abs(m.montant)) + '</b></div>' + select + '</div>';
     }).join('');
+  }
+  function htmlHistorique(b) {
+    var per = b.periode;
+    var chips = [{ id: '', nom: 'Toutes' }, { id: 'compte', nom: 'Compte' }, { id: 'interne', nom: 'Internes' }];
+    b.poches.forEach(function (p) { chips.push({ id: p.id, nom: p.court || p.nom }); });
+    var h = '<div class="filtres" id="filtres-mvt">' + chips.map(function (c) {
+      return '<button type="button" data-filtre="' + esc(c.id) + '"' + ((S.filtrePoche || '') === c.id ? ' class="on"' : '') + '>' + esc(c.nom) + '</button>';
+    }).join('') + '</div>' +
+      '<label class="f" for="rech-mvt">Recherche</label><input id="rech-mvt" value="' + esc(S.rechercheMvt || '') + '" placeholder="Commerçant, référence" autocomplete="off">' +
+      '<div id="liste-mvt">' + htmlListeMouvements(per) + '</div>';
+    return h;
   }
 
   function htmlBudget(b) {
@@ -329,12 +361,12 @@
       '<button type="button" class="btn" id="enregistrer-balayage"' + (b.aBalayer <= 0 || !b.objectifActif ? ' disabled' : '') + '>Enregistrer le balayage</button></article>';
     if (b.alerteTampon) h += '<p class="badline">Sous le tampon de ' + eur(b.tampon) + '. Solde estimé ' + eur(b.soldeCompte) + '.</p>';
     h += '<p class="groupe">Compte courant</p>' + htmlCompte(b);
-    h += '<div class="card"><div class="lbl">Fixes du mois</div>' + (b.fixes.length ? b.fixes.map(function (f) {
+    h += '<div class="card"><div class="row"><div class="lbl">Fixes du mois</div><button type="button" class="lien" data-edit="fixes">Modifier</button></div>' + (b.fixes.length ? b.fixes.map(function (f) {
       return '<div class="row"><span>' + esc(f.nom) + '<div class="mut">' + esc(P.dateCourte(f.date)) + '</div></span><b>' + eur(f.montant) + '</b></div>';
     }).join('') + '<div class="row"><span>Total</span><b>' + eur(b.fixesTotal) + '</b></div>' : '<p class="empty">Aucune charge dans le profil.</p>') + '</div>';
     h += '<p class="groupe">Virés le 11</p>';
     b.poches.forEach(function (p) { h += htmlPocheLarge(p); });
-    h += '<p class="groupe">Mouvements du mois</p><div class="card" id="mouvements">' + htmlMouvements(b.periode) + '</div>';
+    h += '<p class="groupe">Historique</p><div class="card" id="mouvements">' + htmlHistorique(b) + '</div>';
     h += '<div class="card"><h2 style="margin:0 0 6px;font-size:16px">Ajouter une dépense</h2>' +
       '<div class="trois"><div><label class="f">Montant</label><input id="dep-montant" inputmode="decimal" placeholder="0,00"></div>' +
       '<div style="grid-column:span 2"><label class="f">Poche</label><select id="dep-poche">' + optionsPoches('courses') + '</select></div></div>' +
@@ -356,8 +388,11 @@
         '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
         '<div class="row"><span>Épargné</span><b>' + eur(o.epargne) + '</b></div>' +
         '<div class="row"><span>Cible</span><b>' + eur(o.cible) + '</b></div>' +
-        '<div class="row"><span>Reste</span><b>' + eur(o.reste) + '</b></div>' +
-        '<div class="mut">' + (o.atteint ? 'Atteint' : (o === b.objectifActif ? 'En cours · viré le 12 : ' + eur(b.vire12) : 'Ensuite')) + '</div></article>';
+        '<div class="row"><span>Versement du 12</span><b>' + eur(o.mensuel) + '</b></div>' +
+        '<div class="mut">' + (o.atteint ? 'Atteint' : (o === b.objectifActif ? 'En cours · viré le 12 : ' + eur(b.vire12) : 'Ensuite')) + '</div>' +
+        '<div class="ord"><button type="button" class="btn sec" data-ordre="-1" data-id="' + esc(o.id) + '">Monter</button>' +
+        '<button type="button" class="btn sec" data-ordre="1" data-id="' + esc(o.id) + '">Descendre</button></div>' +
+        '<button type="button" class="btn sec" data-edit="obj" data-id="' + esc(o.id) + '">Modifier</button></article>';
     });
     h += '<div class="card"><h2 style="margin:0 0 6px;font-size:16px">Versement</h2>' +
       '<label class="f">Montant</label><input id="vers-montant" inputmode="decimal" placeholder="0,00">' +
@@ -469,7 +504,8 @@
       '<button type="button" class="btn sec" data-act="export-profil">Exporter le profil (règles comprises)</button>' +
       '<button type="button" class="btn sec" data-act="export-sauve">Exporter la sauvegarde</button>' +
       '<button type="button" class="btn sec" data-act="import-sauve">Importer une sauvegarde</button>' +
-      '<p class="mut">Destinataire Trésorier : ' + esc(email || 'non renseigné') + '. Aucune donnée n\'est envoyée à un serveur.</p>');
+      '<button type="button" class="btn sec" data-act="reset-edits">Revenir aux montants du profil</button>' +
+      '<p class="mut">Destinataire Trésorier : ' + esc(email || 'non renseigné') + '. Les montants modifiés ici restent sur l\'appareil et sont inclus dans l\'export du profil. Aucune donnée n\'est envoyée à un serveur.</p>');
   }
 
   function telecharger(nom, texte, type) {
@@ -483,7 +519,7 @@
   }
 
   function profilExportable() {
-    var p = JSON.parse(JSON.stringify(S.profil || { type: 'budget-profil', version: 1 }));
+    var p = JSON.parse(JSON.stringify(M.appliquerSurcharge(S.profil || {}, S.surcharge)));
     var vus = {};
     var regles = (S.reglesLocales || []).concat(p.regles || []).filter(function (r) {
       var k = K.norm(r.contient) + '|' + r.poche;
@@ -533,8 +569,9 @@
       },
       paieRecue: { nette: b.paieRecue, estimee: b.paieRecueEstimee, mois: b.moisPaieRecue.id },
       poches: b.poches.map(function (p) {
-        return { id: p.id, nom: p.nom, budget: p.budget, depense: p.depense, reste: p.reste };
+        return { id: p.id, nom: p.nom, budget: p.budget, budgetMensuel: p.budgetMensuel, depense: p.depense, reste: p.reste, plafond: p.plafond };
       }),
+      fixes: b.fixes,
       compteCourant: { solde: b.soldeCompte, tampon: b.tampon, fixes: b.fixesTotal, alerte: b.alerteTampon },
       resteADepenser: b.resteADepenser,
       aBalayer: b.aBalayer,
@@ -562,19 +599,17 @@
 
   function preparerImport(mouvements) {
     var per = periodeBudget();
-    brouillon = {
-      periode: per,
-      lignes: mouvements.map(function (m, i) {
-        var c = K.classer(m, S.profil || { poches: [] }, S.reglesLocales || []);
-        return {
-          i: i, date: m.date, partenaire: m.partenaire || '', montant: m.montant,
-          reference: m.reference || '', espace: m.espace || '', type: m.type || '',
-          poche: c.poche, ignore: c.ignore, douteux: c.douteux, categorie: c.categorie,
-          source: c.source, motif: c.motif, sauverRegle: false,
-          hors: !P.dansPeriode(m.date, per)
-        };
-      })
-    };
+    var brut = mouvements.map(function (m, i) {
+      var c = K.classer(m, S.profil || { poches: [] }, S.reglesLocales || []);
+      return {
+        i: i, date: m.date, partenaire: m.partenaire || '', montant: m.montant,
+        reference: m.reference || '', espace: m.espace || '', type: m.type || '',
+        poche: c.poche, ignore: c.ignore, douteux: c.douteux, categorie: c.categorie,
+        source: c.source, motif: c.motif, sauverRegle: false, forcer: false,
+        hors: !P.dansPeriode(m.date, per)
+      };
+    });
+    brouillon = { periode: per, lignes: M.marquerDoublons(brut, S.mouvements || []) };
     rendreImport();
   }
   function rendreImport() {
@@ -582,36 +617,48 @@
     var lignes = brouillon.lignes;
     var dans = lignes.filter(function (l) { return !l.hors; });
     var hors = lignes.length - dans.length;
-    var aClasser = dans.filter(function (l) { return !l.ignore && l.categorie !== 'revenu' && !l.poche; }).length;
+    var aClasser = dans.filter(function (l) { return !l.ignore && l.categorie !== 'revenu' && !l.poche && !(l.doublon && !l.forcer); }).length;
+    var doublons = dans.filter(function (l) { return l.doublon && !l.forcer; }).length;
+    var pret = M.lignesAImporter(brouillon.lignes).length;
     var h = '<div class="head"><h2>Vérifier le relevé</h2><button type="button" class="xbtn" data-act="fermer" aria-label="Fermer">✕</button></div>' +
       '<p class="mut">' + esc(P.libellePeriode(brouillon.periode)) + ' · du ' + esc(P.dateCourte(brouillon.periode.debut)) +
-      ' au ' + esc(P.dateCourte(brouillon.periode.fin)) + '. ' + hors + ' hors période, non importé' + (hors > 1 ? 's' : '') + '.</p>' +
+      ' au ' + esc(P.dateCourte(brouillon.periode.fin)) + '. ' + hors + ' hors période, non importé' + (hors > 1 ? 's' : '') +
+      (doublons ? '. ' + doublons + ' doublon' + (doublons > 1 ? 's' : '') + ' laissé' + (doublons > 1 ? 's' : '') + ' de côté.' : '.') + '</p>' +
       '<button type="button" class="btn sec" id="reste-compte">Mettre les lignes à classer sur le compte courant</button>';
     dans.forEach(function (l) {
       var cls = (!l.ignore && l.categorie !== 'revenu' && (!l.poche || l.douteux)) ? ' mv todo' : ' mv';
+      if (l.doublon) cls += ' dup';
       h += '<div class="' + cls.trim() + '"><div class="top"><div><div class="qui">' + esc(l.partenaire || 'Mouvement') + '</div>' +
         '<div class="mut">' + esc(P.dateCourte(l.date)) + ' · ' + esc(l.motif) + (l.espace ? ' · ' + esc(l.espace) : '') +
-        (l.douteux && l.poche ? ' · à vérifier' : '') + '</div></div><b>' + (l.montant > 0 ? '+' : '−') + eur(Math.abs(l.montant)) + '</b></div>';
-      if (!l.ignore && l.categorie !== 'revenu') {
+        (l.douteux && l.poche ? ' · à vérifier' : '') +
+        (l.doublon ? ' · déjà dans l\'historique' : '') + '</div></div><b>' + (l.montant > 0 ? '+' : '−') + eur(Math.abs(l.montant)) + '</b></div>';
+      if (l.doublon) {
+        h += '<label class="check"><input type="checkbox" data-forcer="' + l.i + '"' + (l.forcer ? ' checked' : '') + '> Importer quand même</label>';
+      }
+      if (!l.ignore && l.categorie !== 'revenu' && (!l.doublon || l.forcer)) {
         h += '<select data-brouillon="' + l.i + '" aria-label="Poche de ' + esc(l.partenaire) + '">' + optionsPoches(l.poche) + '</select>' +
           '<label class="check"><input type="checkbox" data-regle="' + l.i + '"' + (l.sauverRegle ? ' checked' : '') + '> Enregistrer comme règle du profil</label>';
       }
       h += '</div>';
     });
     if (!dans.length) h += '<p class="empty">Aucun mouvement sur ce mois budgétaire.</p>';
-    h += '<button type="button" class="btn" id="confirmer-import">Importer ' + (dans.length - aClasser) + ' mouvements</button>' +
+    h += '<button type="button" class="btn" id="confirmer-import"' + (pret ? '' : ' disabled') + '>' +
+      (pret ? 'Importer ' + pret + ' mouvement' + (pret > 1 ? 's' : '') : 'Aucun nouveau mouvement') + '</button>' +
       (aClasser ? '<p class="mut">' + aClasser + ' ligne' + (aClasser > 1 ? 's' : '') + ' sans poche ne seront pas importées.</p>' : '');
     ouvrir(h);
   }
 
   function confirmerImport() {
     if (!brouillon) return;
-    var per = brouillon.periode;
     var ajoutes = [];
     var laisse = 0;
-    brouillon.lignes.forEach(function (l) {
-      if (l.hors) return;
-      if (!l.ignore && l.categorie !== 'revenu' && !l.poche) { laisse++; return; }
+    var gardes = M.lignesAImporter(brouillon.lignes);
+    var ignoresHorsPoche = brouillon.lignes.filter(function (l) {
+      return !l.hors && !(l.doublon && !l.forcer) && !l.ignore && l.categorie !== 'revenu' && !l.poche;
+    }).length;
+    laisse = ignoresHorsPoche;
+    var doublons = brouillon.lignes.filter(function (l) { return !l.hors && l.doublon && !l.forcer; }).length;
+    gardes.forEach(function (l) {
       if (l.sauverRegle && l.partenaire && l.poche) {
         var existe = (S.reglesLocales || []).some(function (r) {
           return K.norm(r.contient) === K.norm(l.partenaire) && r.poche === l.poche;
@@ -626,14 +673,14 @@
         motif: l.motif, source: 'import'
       });
     });
-    S.mouvements = (S.mouvements || []).filter(function (m) {
-      return m.source !== 'import' || m.date < per.debut || m.date > per.fin;
-    }).concat(ajoutes);
+    S.mouvements = (S.mouvements || []).concat(ajoutes);
     sauver();
     fermer();
     onglet = 'budget';
     rendre();
-    toast(ajoutes.length + ' mouvement' + (ajoutes.length > 1 ? 's' : '') + ' importé' + (ajoutes.length > 1 ? 's' : '') + (laisse ? ' · ' + laisse + ' laissé' + (laisse > 1 ? 's' : '') : ''));
+    toast(ajoutes.length + ' mouvement' + (ajoutes.length > 1 ? 's' : '') + ' ajouté' + (ajoutes.length > 1 ? 's' : '') +
+      (doublons ? ' · ' + doublons + ' doublon' + (doublons > 1 ? 's' : '') : '') +
+      (laisse ? ' · ' + laisse + ' sans poche' : ''));
   }
 
   function lignesPdf(items) {
@@ -734,6 +781,87 @@
     rendre();
   }
 
+  function assuranceSurcharge() {
+    if (!S.surcharge) S.surcharge = { fixes: null, poches: {}, objectifs: {}, tampon: null };
+    if (!S.surcharge.poches) S.surcharge.poches = {};
+    if (!S.surcharge.objectifs) S.surcharge.objectifs = {};
+  }
+  function lireFixesFormulaire() {
+    return Array.prototype.map.call(document.querySelectorAll('#fixes-form .editrow'), function (row) {
+      return {
+        id: row.getAttribute('data-id'),
+        nom: row.querySelector('[data-k="nom"]').value,
+        montant: row.querySelector('[data-k="montant"]').value,
+        jour: row.querySelector('[data-k="jour"]').value
+      };
+    });
+  }
+  function dessinerFixes(fixes, tampon) {
+    var h = '<div class="head"><h2>Charges fixes</h2><button type="button" class="xbtn" data-act="fermer" aria-label="Fermer">✕</button></div>' +
+      '<p class="mut">Ces montants restent sur cet appareil et passent devant le profil importé.</p>' +
+      '<label class="f" for="edit-tampon">Tampon à garder sur le compte</label><input id="edit-tampon" inputmode="decimal" value="' + String(tampon).replace('.', ',') + '">' +
+      '<div id="fixes-form">';
+    fixes.forEach(function (f) {
+      h += '<div class="editrow" data-id="' + esc(f.id) + '">' +
+        '<input data-k="nom" value="' + esc(f.nom) + '" aria-label="Nom" maxlength="80">' +
+        '<input data-k="montant" inputmode="decimal" value="' + String(f.montant).replace('.', ',') + '" aria-label="Montant">' +
+        '<input data-k="jour" inputmode="numeric" value="' + esc(f.jour) + '" aria-label="Jour">' +
+        '<button type="button" class="x" data-fixe-sup="' + esc(f.id) + '" aria-label="Supprimer">✕</button></div>';
+    });
+    h += '</div><button type="button" class="btn sec" id="fixe-ajout">Ajouter une ligne</button>' +
+      '<button type="button" class="btn" id="sauver-fixes">Enregistrer</button>';
+    ouvrir(h);
+  }
+  function ouvrirFixes() {
+    var b = courant();
+    dessinerFixes(b.fixes.map(function (f) {
+      return { id: f.id, nom: f.nom, montant: f.montant, jour: f.jour };
+    }), b.tampon);
+  }
+  function ouvrirPoche(id) {
+    var b = courant();
+    var p = b.poches.filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    var brut = M.appliquerSurcharge(S.profil, S.surcharge).poches.filter(function (x) { return x.id === id; })[0] || {};
+    ouvrir('<div class="head"><h2>' + esc(p.nom) + '</h2><button type="button" class="xbtn" data-act="fermer" aria-label="Fermer">✕</button></div>' +
+      '<label class="f">Budget mensuel</label><input id="edit-budget" inputmode="decimal" value="' + String(brut.budget != null ? brut.budget : p.budget).replace('.', ',') + '">' +
+      (p.role === 'reserve' ? '<label class="f">Plafond</label><input id="edit-plafond" inputmode="decimal" value="' + String(brut.plafond != null ? brut.plafond : (p.plafond || 0)).replace('.', ',') + '">' : '') +
+      '<button type="button" class="btn" id="sauver-poche" data-id="' + esc(id) + '">Enregistrer</button>');
+  }
+  function baseEpargne(id) {
+    var versements = (S.versements || []).filter(function (v) { return v.objectifId === id; });
+    var balayages = (S.balayages || []).filter(function (b) { return b.objectifId === id; });
+    return M.r2(versements.reduce(function (s, v) { return s + M.num(v.montant); }, 0) +
+      balayages.reduce(function (s, b) { return s + M.num(b.montant); }, 0));
+  }
+  function ouvrirObjectif(id) {
+    var b = (onglet === 'budget' ? courant() : accueilBilan());
+    var o = b.objectifs.filter(function (x) { return x.id === id; })[0];
+    if (!o) return;
+    ouvrir('<div class="head"><h2>' + esc(o.nom) + '</h2><button type="button" class="xbtn" data-act="fermer" aria-label="Fermer">✕</button></div>' +
+      '<label class="f">Montant cible</label><input id="edit-cible" inputmode="decimal" value="' + String(o.cible).replace('.', ',') + '">' +
+      '<label class="f">Versement du 12</label><input id="edit-mensuel" inputmode="decimal" value="' + String(o.mensuel).replace('.', ',') + '">' +
+      '<label class="f">Déjà épargné</label><input id="edit-epargne" inputmode="decimal" value="' + String(o.epargne).replace('.', ',') + '">' +
+      '<p class="mut">Les versements et balayages saisis dans l\'app sont compris dans « déjà épargné ».</p>' +
+      '<button type="button" class="btn" id="sauver-obj" data-id="' + esc(id) + '">Enregistrer</button>');
+  }
+  function deplacerObjectif(id, delta) {
+    assuranceSurcharge();
+    var b = onglet === 'budget' ? courant() : accueilBilan();
+    var ids = b.objectifs.map(function (o) { return o.id; });
+    var i = ids.indexOf(id);
+    var j = i + delta;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+    ids.forEach(function (oid, idx) {
+      S.surcharge.objectifs[oid] = Object.assign({}, S.surcharge.objectifs[oid], { ordre: idx + 1 });
+    });
+    var yOrdre = window.scrollY;
+    sauver();
+    rendre();
+    window.scrollTo(0, yOrdre);
+  }
+
   function enregistrerBalayage() {
     var b = courant();
     if (b.aBalayer <= 0 || !b.objectifActif) return;
@@ -754,6 +882,18 @@
       window.scrollTo(0, 0);
       return;
     }
+    if (t.dataset.filtre != null) {
+      var yFiltre = window.scrollY;
+      S.filtrePoche = t.dataset.filtre;
+      sauver();
+      rendre();
+      window.scrollTo(0, yFiltre);
+      return;
+    }
+    if (t.dataset.ordre) { deplacerObjectif(t.dataset.id, parseInt(t.dataset.ordre, 10)); return; }
+    if (t.dataset.edit === 'fixes') { ouvrirFixes(); return; }
+    if (t.dataset.edit === 'poche') { ouvrirPoche(t.dataset.id); return; }
+    if (t.dataset.edit === 'obj') { ouvrirObjectif(t.dataset.id); return; }
     if (t.dataset.mois) { changerMois(t.dataset.cible, parseInt(t.dataset.mois, 10)); return; }
     if (t.dataset.jour) { cycleJour(t.dataset.jour); return; }
     if (t.dataset.theme) {
@@ -777,6 +917,11 @@
       return;
     }
     if (act === 'export-profil') { telecharger('profil-budget.json', JSON.stringify(profilExportable(), null, 2)); return; }
+    if (act === 'reset-edits') {
+      S.surcharge = { fixes: null, poches: {}, objectifs: {}, tampon: null };
+      sauver(); fermer(); rendre(); toast('Montants du profil');
+      return;
+    }
     if (act === 'export-sauve') {
       telecharger('budget-sauvegarde.json', JSON.stringify({ type: 'budget-sauvegarde', version: 2, etat: S }, null, 2));
       return;
@@ -839,7 +984,46 @@
       rendreImport();
       return;
     }
-    if (t.id === 'confirmer-import') { confirmerImport(); }
+    if (t.id === 'confirmer-import') { confirmerImport(); return; }
+    if (t.id === 'fixe-ajout') {
+      var lignes = lireFixesFormulaire();
+      var tampon = $('edit-tampon') ? $('edit-tampon').value : '';
+      lignes.push({ id: uid(), nom: '', montant: '', jour: '1' });
+      dessinerFixes(lignes, tampon);
+      return;
+    }
+    if (t.dataset.fixeSup) {
+      var reste = lireFixesFormulaire().filter(function (f) { return f.id !== t.dataset.fixeSup; });
+      dessinerFixes(reste, $('edit-tampon') ? $('edit-tampon').value : '');
+      return;
+    }
+    if (t.id === 'sauver-fixes') {
+      assuranceSurcharge();
+      S.surcharge.fixes = lireFixesFormulaire().filter(function (f) { return String(f.nom || '').trim() || M.num(f.montant); });
+      S.surcharge.tampon = M.num($('edit-tampon').value);
+      sauver(); fermer(); rendre(); toast('Charges enregistrées');
+      return;
+    }
+    if (t.id === 'sauver-poche') {
+      assuranceSurcharge();
+      var idp = t.dataset.id;
+      var patch = { budget: M.num($('edit-budget').value) };
+      if ($('edit-plafond')) patch.plafond = M.num($('edit-plafond').value);
+      S.surcharge.poches[idp] = Object.assign({}, S.surcharge.poches[idp], patch);
+      sauver(); fermer(); rendre(); toast('Poche enregistrée');
+      return;
+    }
+    if (t.id === 'sauver-obj') {
+      assuranceSurcharge();
+      var ido = t.dataset.id;
+      var ajoute = baseEpargne(ido);
+      S.surcharge.objectifs[ido] = Object.assign({}, S.surcharge.objectifs[ido], {
+        cible: M.num($('edit-cible').value),
+        mensuel: M.num($('edit-mensuel').value),
+        epargne: M.r2(M.num($('edit-epargne').value) - ajoute)
+      });
+      sauver(); fermer(); rendre(); toast('Objectif enregistré');
+    }
   });
 
   document.body.addEventListener('change', function (ev) {
@@ -864,6 +1048,14 @@
       var y = $('sheet').scrollTop;
       rendreImport();
       $('sheet').scrollTop = y;
+      return;
+    }
+    if (t.dataset && t.dataset.forcer != null && brouillon) {
+      var ligneF = brouillon.lignes.filter(function (l) { return String(l.i) === t.dataset.forcer; })[0];
+      if (ligneF) ligneF.forcer = t.checked;
+      var yf = $('sheet').scrollTop;
+      rendreImport();
+      $('sheet').scrollTop = yf;
       return;
     }
     if (t.dataset && t.dataset.regle != null && brouillon) {
@@ -907,6 +1099,13 @@
     var f = this.files && this.files[0];
     this.value = '';
     if (f) importerFichierReleve(f);
+  });
+  document.body.addEventListener('input', function (ev) {
+    var t = ev.target;
+    if (!t || t.id !== 'rech-mvt') return;
+    S.rechercheMvt = t.value;
+    var liste = $('liste-mvt');
+    if (liste) liste.innerHTML = htmlListeMouvements(periodeBudget());
   });
   $('overlay').addEventListener('click', fermer);
 
